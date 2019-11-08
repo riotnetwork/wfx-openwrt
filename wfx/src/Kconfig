@@ -1,0 +1,4 @@
+config WFX
+	tristate "WFX wifi SoC driver"
+	help
+	  Silabs WFX wifi soc driver

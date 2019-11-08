@@ -1,0 +1,41 @@
+# wfx-feed
+Silabs WFX Wifi SoC driver port for OpenWRT.
+## Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [Install](#install)
+- [Contribute](#contribute)
+
+## Prerequisites
+
+Ensure your Openwrt build system works :  [OpenWRT](https://openwrt.org/docs/guide-developer/build-system/install-buildsystem), 
+
+## Install
+
+Edit your feeds.conf or feed.conf.default and add the following to it:
+
+    # WFX feed
+    src-git wfx https://github.com/riotnetwork/wfx-openwrt/
+
+Update your build environment and install the packages:
+
+    $ scripts/feeds update wfx
+    $ scripts/feeds install -a -p wfx
+    $ make menuconfig
+
+Driver is located in `Kernel modules -> Wireless Drivers -> kmod-wfx`
+<*> kmod-wfx.................................... Silabs WF200 Wireless Driver
+
+Exit, save and build
+
+    $ make -j4
+
+Ensure that you have SPI or MMC drivers and that your devcietree [is configurd as per Silabs' example](https://github.com/SiliconLabs/wfx-linux-tools/tree/master/overlays) and modified to your specific platform 
+( assuming your platform uses DTS )
+
+## Contribute
+
+Found a bug? Please create an issue on GitHub:
+    https://github.com/riotnetwork/wfx-openwrt/issues
+
+Further tests and PR's are welcome and appreciated.

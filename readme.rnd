@@ -1,5 +1,11 @@
 # wfx-feed
 Silabs WFX Wifi SoC driver port for OpenWRT.
+
+* This is syill a Work in progress, The driver builds and is loaded ( partially) on a BBB ( AM335x ) target but fails on 
+
+ wfx: Unknown symbol cfg80211_find_ie_match (err 0)
+ wfx: Unknown symbol ieee80211_bss_get_ie (err 0)
+
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)

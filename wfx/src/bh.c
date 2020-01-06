@@ -32,7 +32,8 @@ static void device_wakeup(struct wfx_dev *wdev)
 		// completion without consume it (a kind of
 		// wait_for_completion_done_timeout()). So we have to emulate
 		// it.
-		if (wait_for_completion_timeout(&wdev->hif.ctrl_ready, msecs_to_jiffies(2) + 1))
+		if (wait_for_completion_timeout(&wdev->hif.ctrl_ready,
+						msecs_to_jiffies(2) + 1))
 			complete(&wdev->hif.ctrl_ready);
 		else
 			dev_err(wdev->dev, "timeout while wake up chip\n");
@@ -56,7 +57,7 @@ static int rx_helper(struct wfx_dev *wdev, size_t read_len, int *is_cnf)
 	int release_count;
 	int piggyback = 0;
 
-	WARN_ON(read_len < 4);
+	WARN(read_len < 4, "corrupted read");
 	WARN(read_len > round_down(0xFFF, 2) * sizeof(u16),
 	     "%s: request exceed WFx capability", __func__);
 
@@ -69,13 +70,13 @@ static int rx_helper(struct wfx_dev *wdev, size_t read_len, int *is_cnf)
 	if (wfx_data_read(wdev, skb->data, alloc_len))
 		goto err;
 
-	piggyback = le16_to_cpup((u16 *) (skb->data + alloc_len - 2));
+	piggyback = le16_to_cpup((u16 *)(skb->data + alloc_len - 2));
 	_trace_piggyback(piggyback, false);
 
-	hif = (struct hif_msg *) skb->data;
+	hif = (struct hif_msg *)skb->data;
 	WARN(hif->encrypted & 0x1, "unsupported encryption type");
 	if (hif->encrypted == 0x2) {
-		if (wfx_sl_decode(wdev, (void *) hif)) {
+		if (wfx_sl_decode(wdev, (void *)hif)) {
 			dev_kfree_skb(skb);
 			// If frame was a confirmation, expect trouble in next
 			// exchange. However, it is harmless to fail to decode
@@ -83,12 +84,12 @@ static int rx_helper(struct wfx_dev *wdev, size_t read_len, int *is_cnf)
 			// piggyback is probably correct.
 			return piggyback;
 		}
-		le16_to_cpus(hif->len);
+		le16_to_cpus(&hif->len);
 		computed_len = round_up(hif->len - sizeof(hif->len), 16)
 			       + sizeof(struct hif_sl_msg)
 			       + sizeof(struct hif_sl_tag);
 	} else {
-		le16_to_cpus(hif->len);
+		le16_to_cpus(&hif->len);
 		computed_len = round_up(hif->len, 2);
 	}
 	if (computed_len != read_len) {
@@ -102,7 +103,7 @@ static int rx_helper(struct wfx_dev *wdev, size_t read_len, int *is_cnf)
 	if (!(hif->id & HIF_ID_IS_INDICATION)) {
 		(*is_cnf)++;
 		if (hif->id == HIF_CNF_ID_MULTI_TRANSMIT)
-			release_count = le32_to_cpu(((struct hif_cnf_multi_transmit *) hif->body)->num_tx_confs);
+			release_count = le32_to_cpu(((struct hif_cnf_multi_transmit *)hif->body)->num_tx_confs);
 		else
 			release_count = 1;
 		WARN(wdev->hif.tx_buffers_used < release_count, "corrupted buffer counter");
@@ -173,14 +174,15 @@ static void tx_helper(struct wfx_dev *wdev, struct hif_msg *hif)
 	bool is_encrypted = false;
 	size_t len = le16_to_cpu(hif->len);
 
-	BUG_ON(len < sizeof(*hif));
+	WARN(len < sizeof(*hif), "try to send corrupted data");
 
 	hif->seqnum = wdev->hif.tx_seqnum;
 	wdev->hif.tx_seqnum = (wdev->hif.tx_seqnum + 1) % (HIF_COUNTER_MAX + 1);
 
 	if (wfx_is_secure_command(wdev, hif->id)) {
-		len = round_up(len - sizeof(hif->len), 16) + sizeof(hif->len)
-		      + sizeof(struct hif_sl_msg_hdr) + sizeof(struct hif_sl_tag);
+		len = round_up(len - sizeof(hif->len), 16) + sizeof(hif->len) +
+			sizeof(struct hif_sl_msg_hdr) +
+			sizeof(struct hif_sl_tag);
 		// AES support encryption in-place. However, mac80211 access to
 		// 802.11 header after frame was sent (to get MAC addresses).
 		// So, keep origin buffer clear.
@@ -237,11 +239,12 @@ static int bh_work_tx(struct wfx_dev *wdev, int max_msg)
  */
 static void ack_sdio_data(struct wfx_dev *wdev)
 {
-	uint32_t cfg_reg;
+	u32 cfg_reg;
 
 	config_reg_read(wdev, &cfg_reg);
 	if (cfg_reg & 0xFF) {
-		dev_warn(wdev->dev, "chip reports errors: %02x\n", cfg_reg & 0xFF);
+		dev_warn(wdev->dev, "chip reports errors: %02x\n",
+			 cfg_reg & 0xFF);
 		config_reg_write_bits(wdev, 0xFF, 0x00);
 	}
 }
@@ -268,11 +271,13 @@ static void bh_work(struct work_struct *work)
 
 	if (last_op_is_rx)
 		ack_sdio_data(wdev);
-	if (!wdev->hif.tx_buffers_used && !work_pending(work) && !atomic_read(&wdev->scan_in_progress)) {
+	if (!wdev->hif.tx_buffers_used && !work_pending(work) &&
+	    !atomic_read(&wdev->scan_in_progress)) {
 		device_release(wdev);
 		release_chip = true;
 	}
-	_trace_bh_stats(stats_ind, stats_req, stats_cnf, wdev->hif.tx_buffers_used, release_chip);
+	_trace_bh_stats(stats_ind, stats_req, stats_cnf,
+			wdev->hif.tx_buffers_used, release_chip);
 }
 
 /*

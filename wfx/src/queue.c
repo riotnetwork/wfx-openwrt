@@ -13,6 +13,13 @@
 #include "sta.h"
 #include "data_tx.h"
 
+#if (KERNEL_VERSION(3, 19, 0) > LINUX_VERSION_CODE)
+static inline s64 ktime_ms_delta(const ktime_t later, const ktime_t earlier)
+{
+	return ktime_to_ms(ktime_sub(later, earlier));
+}
+#endif
+
 void wfx_tx_lock(struct wfx_dev *wdev)
 {
 	atomic_inc(&wdev->tx_lock);
@@ -42,7 +49,8 @@ void wfx_tx_flush(struct wfx_dev *wdev)
 				 !wdev->hif.tx_buffers_used,
 				 msecs_to_jiffies(3000));
 	if (!ret) {
-		dev_warn(wdev->dev, "cannot flush tx buffers (%d still busy)\n", wdev->hif.tx_buffers_used);
+		dev_warn(wdev->dev, "cannot flush tx buffers (%d still busy)\n",
+			 wdev->hif.tx_buffers_used);
 		wfx_pending_dump_old_frames(wdev, 3000);
 		// FIXME: drop pending frames here
 		wdev->chip_frozen = 1;
@@ -78,7 +86,7 @@ void wfx_tx_queues_unlock(struct wfx_dev *wdev)
 	for (i = 0; i < IEEE80211_NUM_ACS; ++i) {
 		queue = &wdev->tx_queue[i];
 		spin_lock_bh(&queue->queue.lock);
-		BUG_ON(!queue->tx_locked_cnt);
+		WARN(!queue->tx_locked_cnt, "queue already unlocked");
 		if (--queue->tx_locked_cnt == 0)
 			ieee80211_wake_queue(wdev->hw, queue->queue_id);
 		spin_unlock_bh(&queue->queue.lock);
@@ -121,7 +129,8 @@ void wfx_tx_queues_wait_empty_vif(struct wfx_vif *wvif)
 	} while (!done);
 }
 
-static void wfx_tx_queue_clear(struct wfx_dev *wdev, struct wfx_queue *queue, struct sk_buff_head *gc_list)
+static void wfx_tx_queue_clear(struct wfx_dev *wdev, struct wfx_queue *queue,
+			       struct sk_buff_head *gc_list)
 {
 	int i;
 	struct sk_buff *item;
@@ -189,7 +198,8 @@ size_t wfx_tx_queue_get_num_queued(struct wfx_queue *queue,
 		ret = skb_queue_len(&queue->queue);
 	} else {
 		ret = 0;
-		for (i = 0, bit = 1; i < ARRAY_SIZE(queue->link_map_cache); ++i, bit <<= 1) {
+		for (i = 0, bit = 1; i < ARRAY_SIZE(queue->link_map_cache);
+		     ++i, bit <<= 1) {
 			if (link_id_map & bit)
 				ret += queue->link_map_cache[i];
 		}
@@ -198,7 +208,8 @@ size_t wfx_tx_queue_get_num_queued(struct wfx_queue *queue,
 	return ret;
 }
 
-void wfx_tx_queue_put(struct wfx_dev *wdev, struct wfx_queue *queue, struct sk_buff *skb)
+void wfx_tx_queue_put(struct wfx_dev *wdev, struct wfx_queue *queue,
+		      struct sk_buff *skb)
 {
 	struct wfx_queue_stats *stats = &wdev->tx_queue_stats;
 	struct wfx_tx_priv *tx_priv = wfx_skb_tx_priv(skb);
@@ -215,7 +226,9 @@ void wfx_tx_queue_put(struct wfx_dev *wdev, struct wfx_queue *queue, struct sk_b
 	spin_unlock_bh(&queue->queue.lock);
 }
 
-struct sk_buff *wfx_tx_queue_get(struct wfx_dev *wdev, struct wfx_queue *queue, u32 link_id_map)
+static struct sk_buff *wfx_tx_queue_get(struct wfx_dev *wdev,
+					struct wfx_queue *queue,
+					u32 link_id_map)
 {
 	struct sk_buff *skb = NULL;
 	struct sk_buff *item;
@@ -295,8 +308,8 @@ struct sk_buff *wfx_pending_get(struct wfx_dev *wdev, u32 packet_id)
 			return skb;
 		}
 	}
-	WARN_ON(1);
 	spin_unlock_bh(&stats->pending.lock);
+	WARN(1, "cannot find packet in pending queue");
 	return NULL;
 }
 
@@ -313,7 +326,8 @@ void wfx_pending_dump_old_frames(struct wfx_dev *wdev, unsigned int limit_ms)
 	skb_queue_walk(&stats->pending, skb) {
 		tx_priv = wfx_skb_tx_priv(skb);
 		req = wfx_skb_txreq(skb);
-		if (ktime_after(now, ktime_add_ms(tx_priv->xmit_timestamp, limit_ms))) {
+		if (ktime_after(now, ktime_add_ms(tx_priv->xmit_timestamp,
+						  limit_ms))) {
 			if (first) {
 				dev_info(wdev->dev, "frames stuck in firmware since %dms or more:\n",
 					 limit_ms);
@@ -327,7 +341,8 @@ void wfx_pending_dump_old_frames(struct wfx_dev *wdev, unsigned int limit_ms)
 	spin_unlock_bh(&stats->pending.lock);
 }
 
-unsigned int wfx_pending_get_pkt_us_delay(struct wfx_dev *wdev, struct sk_buff *skb)
+unsigned int wfx_pending_get_pkt_us_delay(struct wfx_dev *wdev,
+					  struct sk_buff *skb)
 {
 	ktime_t now = ktime_get();
 	struct wfx_tx_priv *tx_priv = wfx_skb_tx_priv(skb);
@@ -374,7 +389,8 @@ static bool hif_handle_tx_data(struct wfx_vif *wvif, struct sk_buff *skb,
 	case NL80211_IFTYPE_AP:
 		if (!wvif->state) {
 			action = do_drop;
-		} else if (!(BIT(tx_priv->raw_link_id) & (BIT(0) | wvif->link_id_map))) {
+		} else if (!(BIT(tx_priv->raw_link_id) &
+			     (BIT(0) | wvif->link_id_map))) {
 			dev_warn(wvif->wdev->dev, "a frame with expired link-id is dropped\n");
 			action = do_drop;
 		}
@@ -408,7 +424,7 @@ static bool hif_handle_tx_data(struct wfx_vif *wvif, struct sk_buff *skb,
 
 	switch (action) {
 	case do_drop:
-		BUG_ON(wfx_pending_remove(wvif->wdev, skb));
+		wfx_pending_remove(wvif->wdev, skb);
 		handled = true;
 		break;
 	case do_wep:
@@ -460,7 +476,8 @@ static int wfx_get_prio_queue(struct wfx_vif *wvif,
 	/* override winner if bursting */
 	if (winner >= 0 && wvif->wdev->tx_burst_idx >= 0 &&
 	    winner != wvif->wdev->tx_burst_idx &&
-	    !wfx_tx_queue_get_num_queued(&wvif->wdev->tx_queue[winner], tx_allowed_mask & urgent) &&
+	    !wfx_tx_queue_get_num_queued(&wvif->wdev->tx_queue[winner],
+					 tx_allowed_mask & urgent) &&
 	    wfx_tx_queue_get_num_queued(&wvif->wdev->tx_queue[wvif->wdev->tx_burst_idx], tx_allowed_mask))
 		winner = wvif->wdev->tx_burst_idx;
 
@@ -534,10 +551,13 @@ struct hif_msg *wfx_tx_queues_get(struct wfx_dev *wdev)
 		while ((wvif = wvif_iterate(wdev, wvif)) != NULL) {
 			spin_lock_bh(&wvif->ps_state_lock);
 
-			not_found = wfx_tx_queue_mask_get(wvif, &vif_queue, &vif_tx_allowed_mask, &vif_more);
+			not_found = wfx_tx_queue_mask_get(wvif, &vif_queue,
+							  &vif_tx_allowed_mask,
+							  &vif_more);
 
 			if (wvif->mcast_buffered && (not_found || !vif_more) &&
-					(wvif->mcast_tx || !wvif->sta_asleep_mask)) {
+					(wvif->mcast_tx ||
+					 !wvif->sta_asleep_mask)) {
 				wvif->mcast_buffered = false;
 				if (wvif->mcast_tx) {
 					wvif->mcast_tx = false;
@@ -548,7 +568,7 @@ struct hif_msg *wfx_tx_queues_get(struct wfx_dev *wdev)
 			spin_unlock_bh(&wvif->ps_state_lock);
 
 			if (vif_more) {
-				more = 1;
+				more = true;
 				tx_allowed_mask = vif_tx_allowed_mask;
 				queue = vif_queue;
 				ret = 0;
@@ -563,7 +583,7 @@ struct hif_msg *wfx_tx_queues_get(struct wfx_dev *wdev)
 		}
 
 		if (ret)
-			return 0;
+			return NULL;
 
 		queue_num = queue - wdev->tx_queue;
 

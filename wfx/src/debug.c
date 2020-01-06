@@ -89,7 +89,8 @@ static int wfx_counters_show(struct seq_file *seq, void *v)
 		return -EIO;
 
 #define PUT_COUNTER(name) \
-	seq_printf(seq, "%24s %d\n", #name ":", le32_to_cpu(counters.count_##name))
+	seq_printf(seq, "%24s %d\n", #name ":",\
+		   le32_to_cpu(counters.count_##name))
 
 	PUT_COUNTER(tx_packets);
 	PUT_COUNTER(tx_multicast_frames);
@@ -158,10 +159,11 @@ static int wfx_rx_stats_show(struct seq_file *seq, void *v)
 	mutex_lock(&wdev->rx_stats_lock);
 	seq_printf(seq, "Timestamp: %dus\n", st->date);
 	seq_printf(seq, "Low power clock: frequency %uHz, external %s\n",
-		st->pwr_clk_freq,
-		st->is_ext_pwr_clk ? "yes" : "no");
-	seq_printf(seq, "Num. of frames: %d, PER (x10e4): %d, Throughput: %dKbps/s\n",
-		st->nb_rx_frame, st->per_total, st->throughput);
+		   st->pwr_clk_freq,
+		   st->is_ext_pwr_clk ? "yes" : "no");
+	seq_printf(seq,
+		   "Num. of frames: %d, PER (x10e4): %d, Throughput: %dKbps/s\n",
+		   st->nb_rx_frame, st->per_total, st->throughput);
 	seq_puts(seq, "       Num. of      PER     RSSI      SNR      CFO\n");
 	seq_puts(seq, "        frames  (x10e4)    (dBm)     (dB)    (kHz)\n");
 	for (i = 0; i < ARRAY_SIZE(channel_names); i++) {
@@ -177,8 +179,9 @@ static int wfx_rx_stats_show(struct seq_file *seq, void *v)
 }
 DEFINE_SHOW_ATTRIBUTE(wfx_rx_stats);
 
-static ssize_t wfx_send_pds_write(struct file *file, const char __user *user_buf,
-			     size_t count, loff_t *ppos)
+static ssize_t wfx_send_pds_write(struct file *file,
+				  const char __user *user_buf,
+				  size_t count, loff_t *ppos)
 {
 	struct wfx_dev *wdev = file->private_data;
 	char *buf;
@@ -230,9 +233,8 @@ static ssize_t wfx_burn_slk_key_write(struct file *file,
 	}
 	*ppos = *ppos + count;
 
-	ret = copy_from_user(ascii_buf, user_buf, min(count, sizeof(ascii_buf)));
-	if (ret)
-		return ret;
+	if (copy_from_user(ascii_buf, user_buf, min(count, sizeof(ascii_buf))))
+		return -EFAULT;
 	ret = hex2bin(bin_buf, ascii_buf, sizeof(bin_buf));
 	if (ret) {
 		dev_info(wdev->dev, "ignoring malformatted key: %s\n", ascii_buf);
@@ -274,7 +276,8 @@ struct dbgfs_hif_msg {
 	int ret;
 };
 
-static ssize_t wfx_send_hif_msg_write(struct file *file, const char __user *user_buf,
+static ssize_t wfx_send_hif_msg_write(struct file *file,
+				      const char __user *user_buf,
 				      size_t count, loff_t *ppos)
 {
 	struct dbgfs_hif_msg *context = file->private_data;
@@ -291,7 +294,7 @@ static ssize_t wfx_send_hif_msg_write(struct file *file, const char __user *user
 	// wfx_cmd_send() chekc that reply buffer is wide enough, but do not
 	// return precise length read. User have to know how many bytes should
 	// be read. Filling reply buffer with a memory pattern may help user.
-	memset(context->reply, sizeof(context->reply), 0xFF);
+	memset(context->reply, 0xFF, sizeof(context->reply));
 	request = memdup_user(user_buf, count);
 	if (IS_ERR(request))
 		return PTR_ERR(request);
@@ -299,7 +302,8 @@ static ssize_t wfx_send_hif_msg_write(struct file *file, const char __user *user
 		kfree(request);
 		return -EINVAL;
 	}
-	context->ret = wfx_cmd_send(wdev, request, context->reply, sizeof(context->reply), false);
+	context->ret = wfx_cmd_send(wdev, request, context->reply,
+				    sizeof(context->reply), false);
 
 	kfree(request);
 	complete(&context->complete);
@@ -321,9 +325,8 @@ static ssize_t wfx_send_hif_msg_read(struct file *file, char __user *user_buf,
 		return context->ret;
 	// Be carefull, write() is waiting for a full message while read()
 	// only return a payload
-	ret = copy_to_user(user_buf, context->reply, count);
-	if (ret)
-		return ret;
+	if (copy_to_user(user_buf, context->reply, count))
+		return -EFAULT;
 
 	return count;
 }
@@ -355,6 +358,7 @@ static const struct file_operations wfx_send_hif_msg_fops = {
 	.read = wfx_send_hif_msg_read,
 };
 
+
 int wfx_debug_init(struct wfx_dev *wdev)
 {
 	struct dentry *d;
@@ -363,8 +367,10 @@ int wfx_debug_init(struct wfx_dev *wdev)
 	debugfs_create_file("counters", 0444, d, wdev, &wfx_counters_fops);
 	debugfs_create_file("rx_stats", 0444, d, wdev, &wfx_rx_stats_fops);
 	debugfs_create_file("send_pds", 0200, d, wdev, &wfx_send_pds_fops);
-	debugfs_create_file("burn_slk_key", 0200, d, wdev, &wfx_burn_slk_key_fops);
-	debugfs_create_file("send_hif_msg", 0600, d, wdev, &wfx_send_hif_msg_fops);
+	debugfs_create_file("burn_slk_key", 0200, d, wdev,
+			    &wfx_burn_slk_key_fops);
+	debugfs_create_file("send_hif_msg", 0600, d, wdev,
+			    &wfx_send_hif_msg_fops);
 
 	return 0;
 }

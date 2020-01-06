@@ -1,3 +1,44 @@
+Changes in 2.3.5
+----------------
+
+  * Fix support of secure link
+  * Fix change in rx_stats output introduced in 2.3.3
+
+Changes in 2.3.4
+----------------
+
+  * Improve throughput by changing the way to build tx_retry_policies requests
+
+Changes in 2.3.3
+----------------
+
+  * Fix some throughput issues caused by:
+     - wrong tx_retry_policy reset
+     - overflow in the usage counter of tx_retry_policies
+  * Backport changes accepted in kernel 5.5. It contains mainly cosmetics
+    changes
+  * Update architecture in documentation
+
+Changes in 2.3.2
+----------------
+
+  * Do not use tx_retry_policy 15 that is reserved for firmware internal usage
+  * Add parameter slk_unsecure_cmds to exclude some commands from encryption set
+    when secure link is used (mainly for debug purpose)
+  * Add parameter slk_renew_period to reduce key renew period (mainly for debug
+    purpose)
+  * Parameter slk_key is no more visible when module is compiled without secure
+    link
+  * Add a way to reset "frozen_chip" state in internal version
+  * Replace BUG_ON() with simple warnings
+  * Fix setting MAC address from DT (IPWHIFER-510)
+  * Fix Oops when CONFIG_OF_NET is not enabled
+  * Fix error code when using burn_slk_key and send_hif_msg return errors
+  * Fix memory initialisation in send_hif_msg
+  * Fix various compilation problems related to big-endian targets
+  * Fix potential vulnerability to spectre
+  * Various improvement in continuous integration recipe
+
 Changes in 2.3.1
 ----------------
 
@@ -36,8 +77,8 @@ Changes in 2.3
   * Fix interface and rates used of self-generated frames (null-frames in case
     of bss loss)
   * Fix polarity of rx_filter.bssid. Expect to receive less useless data.
-  * Fix shutdown handling when gpio_reset is not used (IPWHIFER-467)
-  * Add "tx_status" tracepoint
+  * Fix shutdown handling when gpio_reset is not used (IPWHIFER-467,
+    IPWHIFER-501)
   * Make API compliant with kernel coding style (IPWHIFER-353, IPWHIFER-248,
     IPWHIFER-253)
   * Synchronize API headers with firmware
@@ -45,6 +86,8 @@ Changes in 2.3
       - "hif" is now the prefered terminology for messages between host and chip
       - "mcast" is now prefered over "multicast"
       - multiple files were been renamed
+  * Tracepoints wsm_* has been renamed in hif_*
+  * Add "tx_status" tracepoint
   * Multiple cosmetics fixes for upstream submission (IPWHIFER-371)
 
 Changes in 2.2.5

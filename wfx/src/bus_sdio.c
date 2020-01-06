@@ -37,8 +37,8 @@ static int wfx_sdio_copy_from_io(void *priv, unsigned int reg_id,
 	unsigned int sdio_addr = reg_id << 2;
 	int ret;
 
-	BUG_ON(reg_id > 7);
-	WARN(((uintptr_t) dst) & 3, "unaligned buffer size");
+	WARN(reg_id > 7, "chip only has 7 registers");
+	WARN(((uintptr_t)dst) & 3, "unaligned buffer size");
 	WARN(count & 3, "unaligned buffer address");
 
 	/* Use queue mode buffers */
@@ -58,15 +58,15 @@ static int wfx_sdio_copy_to_io(void *priv, unsigned int reg_id,
 	unsigned int sdio_addr = reg_id << 2;
 	int ret;
 
-	BUG_ON(reg_id > 7);
-	WARN(((uintptr_t) src) & 3, "unaligned buffer size");
+	WARN(reg_id > 7, "chip only has 7 registers");
+	WARN(((uintptr_t)src) & 3, "unaligned buffer size");
 	WARN(count & 3, "unaligned buffer address");
 
 	/* Use queue mode buffers */
 	if (reg_id == WFX_REG_IN_OUT_QUEUE)
 		sdio_addr |= bus->buf_id_tx << 7;
 	// FIXME: discards 'const' qualifier for src
-	ret = sdio_memcpy_toio(bus->func, sdio_addr, (void *) src, count);
+	ret = sdio_memcpy_toio(bus->func, sdio_addr, (void *)src, count);
 	if (!ret && reg_id == WFX_REG_IN_OUT_QUEUE)
 		bus->buf_id_tx = (bus->buf_id_tx + 1) % 32;
 
@@ -180,14 +180,17 @@ static int wfx_sdio_probe(struct sdio_func *func,
 		}
 		bus->of_irq = irq_of_parse_and_map(np, 0);
 	} else {
-		dev_warn(&func->dev, "device is not declared in DT, features will be limited\n");
+		dev_warn(&func->dev,
+			 "device is not declared in DT, features will be limited\n");
 		// FIXME: ignore VID/PID and only rely on device tree
 		// return -ENODEV;
 	}
 
 	bus->func = func;
 	sdio_set_drvdata(func, bus);
-	func->card->quirks |= MMC_QUIRK_LENIENT_FN0 | MMC_QUIRK_BLKSZ_FOR_BYTE_MODE | MMC_QUIRK_BROKEN_BYTE_MODE_512;
+	func->card->quirks |= MMC_QUIRK_LENIENT_FN0 |
+			      MMC_QUIRK_BLKSZ_FOR_BYTE_MODE |
+			      MMC_QUIRK_BROKEN_BYTE_MODE_512;
 
 	sdio_claim_host(func);
 	ret = sdio_enable_func(func);

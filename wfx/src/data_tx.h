@@ -31,17 +31,17 @@ enum wfx_link_status {
 struct wfx_link_entry {
 	unsigned long		timestamp;
 	enum wfx_link_status	status;
-	uint8_t			mac[ETH_ALEN];
-	uint8_t			old_mac[ETH_ALEN];
-	uint8_t			buffered[WFX_MAX_TID];
+	u8			mac[ETH_ALEN];
+	u8			old_mac[ETH_ALEN];
+	u8			buffered[WFX_MAX_TID];
 	struct sk_buff_head	rx_queue;
 };
 
 struct tx_policy {
 	struct list_head link;
-	uint8_t rates[12];
-	uint8_t usage_count;
-	uint8_t uploaded;
+	int usage_count;
+	u8 rates[12];
+	bool uploaded;
 };
 
 struct tx_policy_cache {
@@ -55,12 +55,13 @@ struct tx_policy_cache {
 struct wfx_tx_priv {
 	ktime_t xmit_timestamp;
 	struct ieee80211_key_conf *hw_key;
-	uint8_t link_id;
-	uint8_t raw_link_id;
-	uint8_t tid;
+	u8 link_id;
+	u8 raw_link_id;
+	u8 tid;
 } __packed;
 
-void tx_policy_init(struct wfx_vif *wvif);
+void wfx_tx_policy_init(struct wfx_vif *wvif);
+void wfx_tx_policy_upload_work(struct work_struct *work);
 
 void wfx_tx(struct ieee80211_hw *hw, struct ieee80211_tx_control *control,
 	    struct sk_buff *skb);
@@ -79,12 +80,12 @@ static inline struct wfx_tx_priv *wfx_skb_tx_priv(struct sk_buff *skb)
 	if (!skb)
 		return NULL;
 	tx_info = IEEE80211_SKB_CB(skb);
-	return (struct wfx_tx_priv *) tx_info->rate_driver_data;
+	return (struct wfx_tx_priv *)tx_info->rate_driver_data;
 }
 
 static inline struct hif_req_tx *wfx_skb_txreq(struct sk_buff *skb)
 {
-	struct hif_msg *hif = (struct hif_msg *) skb->data;
+	struct hif_msg *hif = (struct hif_msg *)skb->data;
 	struct hif_req_tx *req = (struct hif_req_tx *) hif->body;
 
 	return req;

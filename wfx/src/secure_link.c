@@ -3,6 +3,8 @@
  * Copyright (c) 2019, Silicon Laboratories, Inc.
  */
 
+#include <linux/of.h>
+#include <linux/module.h>
 #include <linux/random.h>
 #include <crypto/sha.h>
 #include <mbedtls/md.h>
@@ -13,6 +15,23 @@
 
 #include "secure_link.h"
 #include "wfx.h"
+
+static char *slk_key;
+module_param(slk_key, charp, 0600);
+MODULE_PARM_DESC(slk_key, "secret key for secure link (expect 64 hex digits).");
+
+static char *slk_unsecure_cmds = "";
+module_param(slk_unsecure_cmds, charp, 0644);
+MODULE_PARM_DESC(slk_unsecure_cmds, "list of HIF commands IDs (ie. 4,132-256) that won't be encrypted (default: empty).");
+
+unsigned int slk_renew_period = BIT(29);
+module_param(slk_renew_period, int, 0644);
+MODULE_PARM_DESC(slk_renew_period, "number of secure link messages before renewing the key (default: 2^29).");
+
+void mbedtls_platform_zeroize(void *buf, size_t len)
+{
+	memset(buf, 0, len);
+}
 
 static int mbedtls_random(void *data, unsigned char *output, size_t len)
 {
@@ -43,7 +62,7 @@ int wfx_sl_decode(struct wfx_dev *wdev, struct hif_sl_msg *m)
 		dev_warn(wdev->dev, "wrong encrypted message sequence: %d != %d\n",
 				m->hdr.seqnum, wdev->sl.rx_seqnum);
 	wdev->sl.rx_seqnum = m->hdr.seqnum + 1;
-	if (wdev->sl.rx_seqnum == BIT(30) / 2)
+	if (wdev->sl.rx_seqnum == slk_renew_period)
 		schedule_work(&wdev->sl.key_renew_work);
 
 	memcpy(output, &m->len, sizeof(m->len));
@@ -73,7 +92,7 @@ int wfx_sl_encode(struct wfx_dev *wdev, struct hif_msg *input, struct hif_sl_msg
 	// Other bytes of nonce are 0
 	nonce[2] = wdev->sl.tx_seqnum;
 	wdev->sl.tx_seqnum++;
-	if (wdev->sl.tx_seqnum == BIT(30) / 2)
+	if (wdev->sl.tx_seqnum == slk_renew_period)
 		schedule_work(&wdev->sl.key_renew_work);
 
 	ret = mbedtls_ccm_encrypt_and_tag(&wdev->sl.ccm_ctxt, payload_len,
@@ -196,12 +215,20 @@ static void wfx_sl_init_cfg(struct wfx_dev *wdev)
 {
 	DECLARE_BITMAP(sl_commands, 256);
 
-	bitmap_fill(sl_commands, 256);
-	clear_bit(HIF_REQ_ID_SET_SL_MAC_KEY, sl_commands);
-	clear_bit(HIF_REQ_ID_SL_EXCHANGE_PUB_KEYS, sl_commands);
+	if (bitmap_parselist(slk_unsecure_cmds, sl_commands, 256)) {
+		dev_err(wdev->dev, "ignoring malformatted list of unencrypted commands: %s\n",
+			slk_unsecure_cmds);
+		bitmap_zero(sl_commands, 256);
+	}
+	bitmap_complement(sl_commands, sl_commands, 256);
+	clear_bit(HIF_CNF_ID_SET_SL_MAC_KEY, sl_commands);
+	clear_bit(HIF_CNF_ID_SL_EXCHANGE_PUB_KEYS, sl_commands);
 	clear_bit(HIF_IND_ID_SL_EXCHANGE_PUB_KEYS, sl_commands);
 	clear_bit(HIF_IND_ID_EXCEPTION, sl_commands);
 	clear_bit(HIF_IND_ID_ERROR, sl_commands);
+	clear_bit(HIF_IND_ID_RX, sl_commands);
+	clear_bit(HIF_CNF_ID_TX, sl_commands);
+	clear_bit(HIF_CNF_ID_MULTI_TRANSMIT, sl_commands);
 	hif_sl_config(wdev, sl_commands);
 	bitmap_copy(wdev->sl.commands, sl_commands, 256);
 }
@@ -238,4 +265,26 @@ int wfx_sl_init(struct wfx_dev *wdev)
 void wfx_sl_deinit(struct wfx_dev *wdev)
 {
 	mbedtls_ccm_free(&wdev->sl.ccm_ctxt);
+}
+
+void wfx_sl_fill_pdata(struct device *dev, struct wfx_platform_data *pdata)
+{
+	const char *ascii_key = NULL;
+	int ret = 0;
+
+	if (slk_key)
+		ascii_key = slk_key;
+	if (!ascii_key)
+		ret = of_property_read_string(dev->of_node, "slk_key", &ascii_key);
+	if (ret == -EILSEQ || ret == -ENODATA)
+		dev_err(dev, "ignoring malformatted key from DT\n");
+	if (!ascii_key)
+		return;
+
+	ret = hex2bin(pdata->slk_key, ascii_key, sizeof(pdata->slk_key));
+	if (ret) {
+		dev_err(dev, "ignoring malformatted key: %s\n", ascii_key);
+		memset(pdata->slk_key, 0, sizeof(pdata->slk_key));
+		return;
+	}
 }

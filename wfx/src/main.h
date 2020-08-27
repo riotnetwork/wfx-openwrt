@@ -13,10 +13,24 @@
 #include <linux/device.h>
 #include <linux/gpio/consumer.h>
 
-#include "bus.h"
 #include "hif_api_general.h"
 
+#if (KERNEL_VERSION(4, 6, 0) > LINUX_VERSION_CODE)
+static inline int devm_add_action_or_reset(struct device *dev,
+					   void (*action)(void *), void *data)
+{
+	int ret;
+
+	ret = devm_add_action(dev, action, data);
+	if (ret)
+		action(data);
+
+	return ret;
+}
+#endif
+
 struct wfx_dev;
+struct hwbus_ops;
 
 struct wfx_platform_data {
 	/* Keyset and ".sec" extention will appended to this string */
@@ -29,7 +43,7 @@ struct wfx_platform_data {
 	 */
 	bool use_rising_clk;
 #ifdef CONFIG_WFX_SECURE_LINK
-	unsigned char slk_key[API_KEY_VALUE_SIZE];
+	u8 slk_key[API_KEY_VALUE_SIZE];
 #endif
 };
 
@@ -37,7 +51,6 @@ struct wfx_dev *wfx_init_common(struct device *dev,
 				const struct wfx_platform_data *pdata,
 				const struct hwbus_ops *hwbus_ops,
 				void *hwbus_priv);
-void wfx_free_common(struct wfx_dev *wdev);
 
 int wfx_probe(struct wfx_dev *wdev);
 void wfx_release(struct wfx_dev *wdev);
@@ -45,6 +58,6 @@ void wfx_release(struct wfx_dev *wdev);
 struct gpio_desc *wfx_get_gpio(struct device *dev, int override,
 			       const char *label);
 bool wfx_api_older_than(struct wfx_dev *wdev, int major, int minor);
-int wfx_send_pds(struct wfx_dev *wdev, unsigned char *buf, size_t len);
+int wfx_send_pds(struct wfx_dev *wdev, u8 *buf, size_t len);
 
 #endif

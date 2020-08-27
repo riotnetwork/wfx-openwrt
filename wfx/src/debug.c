@@ -9,6 +9,11 @@
 #include <linux/debugfs.h>
 #include <linux/seq_file.h>
 #include <linux/crc32.h>
+#if (KERNEL_VERSION(4, 1, 0) > LINUX_VERSION_CODE)
+#include <linux/ftrace_event.h>
+#else
+#include <linux/trace_events.h>
+#endif
 
 #include "debug.h"
 #include "wfx.h"
@@ -33,6 +38,23 @@ static const struct file_operations __name ## _fops = {			\
 	.read		= seq_read,					\
 	.llseek		= seq_lseek,					\
 	.release	= single_release,				\
+}
+#endif
+
+#if (KERNEL_VERSION(4, 7, 0) > LINUX_VERSION_CODE)
+#define DEFINE_DEBUGFS_ATTRIBUTE(__fops, __get, __set, __fmt)		\
+static int __fops ## _open(struct inode *inode, struct file *file)	\
+{									\
+	__simple_attr_check_format(__fmt, 0ull);			\
+	return simple_attr_open(inode, file, __get, __set, __fmt);	\
+}									\
+static const struct file_operations __fops = {				\
+	.owner	 = THIS_MODULE,						\
+	.open	 = __fops ## _open,					\
+	.release = simple_attr_release,					\
+	.read	 = simple_attr_read,					\
+	.write	 = simple_attr_write,					\
+	.llseek  = generic_file_llseek,					\
 }
 #endif
 
@@ -78,19 +100,26 @@ const char *get_reg_name(unsigned long id)
 
 static int wfx_counters_show(struct seq_file *seq, void *v)
 {
-	int ret;
+	int ret, i;
 	struct wfx_dev *wdev = seq->private;
-	struct hif_mib_extended_count_table counters;
+	struct hif_mib_extended_count_table counters[3];
 
-	ret = hif_get_counters_table(wdev, &counters);
-	if (ret < 0)
-		return ret;
-	if (ret > 0)
-		return -EIO;
+	for (i = 0; i < ARRAY_SIZE(counters); i++) {
+		ret = hif_get_counters_table(wdev, i, counters + i);
+		if (ret < 0)
+			return ret;
+		if (ret > 0)
+			return -EIO;
+	}
+
+	seq_printf(seq, "%-24s %12s %12s %12s\n",
+		   "", "global", "iface 0", "iface 1");
 
 #define PUT_COUNTER(name) \
-	seq_printf(seq, "%24s %d\n", #name ":",\
-		   le32_to_cpu(counters.count_##name))
+	seq_printf(seq, "%-24s %12d %12d %12d\n", #name, \
+		   le32_to_cpu(counters[2].count_##name), \
+		   le32_to_cpu(counters[0].count_##name), \
+		   le32_to_cpu(counters[1].count_##name))
 
 	PUT_COUNTER(tx_packets);
 	PUT_COUNTER(tx_multicast_frames);
@@ -121,6 +150,12 @@ static int wfx_counters_show(struct seq_file *seq, void *v)
 	PUT_COUNTER(miss_beacon);
 
 #undef PUT_COUNTER
+
+	for (i = 0; i < ARRAY_SIZE(counters[0].reserved); i++)
+		seq_printf(seq, "reserved[%02d]%12s %12d %12d %12d\n", i, "",
+			   le32_to_cpu(counters[2].reserved[i]),
+			   le32_to_cpu(counters[0].reserved[i]),
+			   le32_to_cpu(counters[1].reserved[i]));
 
 	return 0;
 }
@@ -159,7 +194,7 @@ static int wfx_rx_stats_show(struct seq_file *seq, void *v)
 	mutex_lock(&wdev->rx_stats_lock);
 	seq_printf(seq, "Timestamp: %dus\n", st->date);
 	seq_printf(seq, "Low power clock: frequency %uHz, external %s\n",
-		   st->pwr_clk_freq,
+		   le32_to_cpu(st->pwr_clk_freq),
 		   st->is_ext_pwr_clk ? "yes" : "no");
 	seq_printf(seq,
 		   "Num. of frames: %d, PER (x10e4): %d, Throughput: %dKbps/s\n",
@@ -169,15 +204,42 @@ static int wfx_rx_stats_show(struct seq_file *seq, void *v)
 	for (i = 0; i < ARRAY_SIZE(channel_names); i++) {
 		if (channel_names[i])
 			seq_printf(seq, "%5s %8d %8d %8d %8d %8d\n",
-				   channel_names[i], st->nb_rx_by_rate[i],
-				   st->per[i], st->rssi[i] / 100,
-				   st->snr[i] / 100, st->cfo[i]);
+				   channel_names[i],
+				   le32_to_cpu(st->nb_rx_by_rate[i]),
+				   le16_to_cpu(st->per[i]),
+				   (s16)le16_to_cpu(st->rssi[i]) / 100,
+				   (s16)le16_to_cpu(st->snr[i]) / 100,
+				   (s16)le16_to_cpu(st->cfo[i]));
 	}
 	mutex_unlock(&wdev->rx_stats_lock);
 
 	return 0;
 }
 DEFINE_SHOW_ATTRIBUTE(wfx_rx_stats);
+
+static int wfx_tx_power_loop_show(struct seq_file *seq, void *v)
+{
+	struct wfx_dev *wdev = seq->private;
+	struct hif_tx_power_loop_info *st = &wdev->tx_power_loop_info;
+	int tmp;
+
+	mutex_lock(&wdev->tx_power_loop_info_lock);
+	tmp = le16_to_cpu(st->tx_gain_dig);
+	seq_printf(seq, "Tx gain digital: %d\n", tmp);
+	tmp = le16_to_cpu(st->tx_gain_pa);
+	seq_printf(seq, "Tx gain PA: %d\n", tmp);
+	tmp = (s16)le16_to_cpu(st->target_pout);
+	seq_printf(seq, "Target Pout: %d.%02d dBm\n", tmp / 4, (tmp % 4) * 25);
+	tmp = (s16)le16_to_cpu(st->p_estimation);
+	seq_printf(seq, "FEM Pout: %d.%02d dBm\n", tmp / 4, (tmp % 4) * 25);
+	tmp = le16_to_cpu(st->vpdet);
+	seq_printf(seq, "Vpdet: %d mV\n", tmp);
+	seq_printf(seq, "Measure index: %d\n", st->measurement_index);
+	mutex_unlock(&wdev->tx_power_loop_info_lock);
+
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(wfx_tx_power_loop);
 
 static ssize_t wfx_send_pds_write(struct file *file,
 				  const char __user *user_buf,
@@ -214,9 +276,9 @@ static ssize_t wfx_burn_slk_key_write(struct file *file,
 {
 	struct wfx_dev *wdev = file->private_data;
 	char bin_buf[API_KEY_VALUE_SIZE + 4];
-	uint32_t *user_crc32 = (uint32_t *) (bin_buf + API_KEY_VALUE_SIZE);
+	u32 *user_crc32 = (u32 *)(bin_buf + API_KEY_VALUE_SIZE);
 	char ascii_buf[(API_KEY_VALUE_SIZE + 4) * 2];
-	uint32_t crc32;
+	u32 crc32;
 	int ret;
 
 	if (wdev->hw_caps.capabilities.link_mode == SEC_LINK_ENFORCED) {
@@ -237,12 +299,14 @@ static ssize_t wfx_burn_slk_key_write(struct file *file,
 		return -EFAULT;
 	ret = hex2bin(bin_buf, ascii_buf, sizeof(bin_buf));
 	if (ret) {
-		dev_info(wdev->dev, "ignoring malformatted key: %s\n", ascii_buf);
+		dev_info(wdev->dev, "ignoring malformatted key: %s\n",
+			 ascii_buf);
 		return -EINVAL;
 	}
 	crc32 = crc32(0xffffffff, bin_buf, API_KEY_VALUE_SIZE) ^ 0xffffffff;
 	if (crc32 != *user_crc32) {
-		dev_err(wdev->dev, "incorrect crc32: %08x != %08x\n", crc32, *user_crc32);
+		dev_err(wdev->dev, "incorrect crc32: %08x != %08x\n",
+			crc32, *user_crc32);
 		return -EINVAL;
 	}
 	ret = hif_sl_set_mac_key(wdev, bin_buf, SL_MAC_KEY_DEST_OTP);
@@ -298,7 +362,7 @@ static ssize_t wfx_send_hif_msg_write(struct file *file,
 	request = memdup_user(user_buf, count);
 	if (IS_ERR(request))
 		return PTR_ERR(request);
-	if (request->len != count) {
+	if (le16_to_cpu(request->len) != count) {
 		kfree(request);
 		return -EINVAL;
 	}
@@ -358,6 +422,28 @@ static const struct file_operations wfx_send_hif_msg_fops = {
 	.read = wfx_send_hif_msg_read,
 };
 
+static int wfx_ps_timeout_set(void *data, u64 val)
+{
+	struct wfx_dev *wdev = (struct wfx_dev *)data;
+	struct wfx_vif *wvif;
+
+	wdev->force_ps_timeout = val;
+	wvif = NULL;
+	while ((wvif = wvif_iterate(wdev, wvif)) != NULL)
+		wfx_update_pm(wvif);
+	return 0;
+}
+
+static int wfx_ps_timeout_get(void *data, u64 *val)
+{
+	struct wfx_dev *wdev = (struct wfx_dev *)data;
+
+	*val = wdev->force_ps_timeout;
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(wfx_ps_timeout_fops, wfx_ps_timeout_get, wfx_ps_timeout_set, "%lld\n");
+
 
 int wfx_debug_init(struct wfx_dev *wdev)
 {
@@ -366,11 +452,14 @@ int wfx_debug_init(struct wfx_dev *wdev)
 	d = debugfs_create_dir("wfx", wdev->hw->wiphy->debugfsdir);
 	debugfs_create_file("counters", 0444, d, wdev, &wfx_counters_fops);
 	debugfs_create_file("rx_stats", 0444, d, wdev, &wfx_rx_stats_fops);
+	debugfs_create_file("tx_power_loop", 0444, d, wdev,
+			    &wfx_tx_power_loop_fops);
 	debugfs_create_file("send_pds", 0200, d, wdev, &wfx_send_pds_fops);
 	debugfs_create_file("burn_slk_key", 0200, d, wdev,
 			    &wfx_burn_slk_key_fops);
 	debugfs_create_file("send_hif_msg", 0600, d, wdev,
 			    &wfx_send_hif_msg_fops);
+	debugfs_create_file("ps_timeout", 0600, d, wdev, &wfx_ps_timeout_fops);
 
 	return 0;
 }

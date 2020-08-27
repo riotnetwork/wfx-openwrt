@@ -67,7 +67,7 @@
 #define DCA_TIMEOUT  50 // milliseconds
 #define WAKEUP_TIMEOUT 200 // milliseconds
 
-static const char * const fwio_error_strings[] = {
+static const char * const fwio_errors[] = {
 	[ERR_INVALID_SEC_TYPE] = "Invalid section type or wrong encryption",
 	[ERR_SIG_VERIF_FAILED] = "Signature verification failed",
 	[ERR_AES_CTRL_KEY] = "AES control key not initialized",
@@ -105,16 +105,16 @@ static int sram_write_dma_safe(struct wfx_dev *wdev, u32 addr, const u8 *buf,
 	return ret;
 }
 
-int get_firmware(struct wfx_dev *wdev, u32 keyset_chip,
-		 const struct firmware **fw, int *file_offset)
+static int get_firmware(struct wfx_dev *wdev, u32 keyset_chip,
+			const struct firmware **fw, int *file_offset)
 {
 	int keyset_file;
 	char filename[256];
 	const char *data;
 	int ret;
 
-	snprintf(filename, sizeof(filename), "%s_%02X.sec", wdev->pdata.file_fw,
-		 keyset_chip);
+	snprintf(filename, sizeof(filename), "%s_%02X.sec",
+		 wdev->pdata.file_fw, keyset_chip);
 #if (KERNEL_VERSION(4, 18, 0) > LINUX_VERSION_CODE)
 	ret = request_firmware(fw, filename, wdev->dev);
 #else
@@ -187,7 +187,7 @@ static int wait_ncp_status(struct wfx_dev *wdev, u32 status)
 static int upload_firmware(struct wfx_dev *wdev, const u8 *data, size_t len)
 {
 	int ret;
-	u32 offs, bytes_done;
+	u32 offs, bytes_done = 0;
 	ktime_t now, start;
 
 	if (len % DNLD_BLOCK_SIZE) {
@@ -198,15 +198,14 @@ static int upload_firmware(struct wfx_dev *wdev, const u8 *data, size_t len)
 	while (offs < len) {
 		start = ktime_get();
 		for (;;) {
-			ret = sram_reg_read(wdev, WFX_DCA_GET, &bytes_done);
-			if (ret < 0)
-				return ret;
 			now = ktime_get();
-			if (offs +
-			    DNLD_BLOCK_SIZE - bytes_done < DNLD_FIFO_SIZE)
+			if (offs + DNLD_BLOCK_SIZE - bytes_done < DNLD_FIFO_SIZE)
 				break;
 			if (ktime_after(now, ktime_add_ms(start, DCA_TIMEOUT)))
 				return -ETIMEDOUT;
+			ret = sram_reg_read(wdev, WFX_DCA_GET, &bytes_done);
+			if (ret < 0)
+				return ret;
 		}
 		if (ktime_compare(now, start))
 			dev_dbg(wdev->dev, "answer after %lldus\n",
@@ -230,22 +229,16 @@ static int upload_firmware(struct wfx_dev *wdev, const u8 *data, size_t len)
 
 static void print_boot_status(struct wfx_dev *wdev)
 {
-	u32 val32;
+	u32 reg;
 
-	sram_reg_read(wdev, WFX_STATUS_INFO, &val32);
-	if (val32 == 0x12345678) {
-		dev_info(wdev->dev, "no error reported by secure boot\n");
-	} else {
-		sram_reg_read(wdev, WFX_ERR_INFO, &val32);
-		if (val32 < ARRAY_SIZE(fwio_error_strings) &&
-		    fwio_error_strings[val32])
-			dev_info(wdev->dev, "secure boot error: %s\n",
-				 fwio_error_strings[val32]);
-		else
-			dev_info(wdev->dev,
-				 "secure boot error: Unknown (0x%02x)\n",
-				 val32);
-	}
+	sram_reg_read(wdev, WFX_STATUS_INFO, &reg);
+	if (reg == 0x12345678)
+		return;
+	sram_reg_read(wdev, WFX_ERR_INFO, &reg);
+	if (reg < ARRAY_SIZE(fwio_errors) && fwio_errors[reg])
+		dev_info(wdev->dev, "secure boot: %s\n", fwio_errors[reg]);
+	else
+		dev_info(wdev->dev, "secure boot: Error %#02x\n", reg);
 }
 
 static int load_firmware_secure(struct wfx_dev *wdev)
@@ -341,8 +334,8 @@ static int init_gpr(struct wfx_dev *wdev)
 				     gpr_init[i].value);
 		if (ret < 0)
 			return ret;
-		dev_dbg(wdev->dev, "  index %02x: %08x\n", gpr_init[i].index,
-			gpr_init[i].value);
+		dev_dbg(wdev->dev, "  index %02x: %08x\n",
+			gpr_init[i].index, gpr_init[i].value);
 	}
 	return 0;
 }
@@ -355,7 +348,7 @@ int wfx_init_device(struct wfx_dev *wdev)
 	ktime_t now, start;
 	u32 reg;
 
-	reg = CFG_DIRECT_ACCESS_MODE | CFG_CPU_RESET | CFG_WORD_MODE2;
+	reg = CFG_DIRECT_ACCESS_MODE | CFG_CPU_RESET | CFG_BYTE_ORDER_ABCD;
 	if (wdev->pdata.use_rising_clk)
 		reg |= CFG_CLK_RISE_EDGE;
 	ret = config_reg_write(wdev, reg);
@@ -376,7 +369,7 @@ int wfx_init_device(struct wfx_dev *wdev)
 	dev_dbg(wdev->dev, "initial config register value: %08x\n", reg);
 
 	hw_revision = FIELD_GET(CFG_DEVICE_ID_MAJOR, reg);
-	if (hw_revision == 0 || hw_revision > 2) {
+	if (hw_revision == 0) {
 		dev_err(wdev->dev, "bad hardware revision number: %d\n",
 			hw_revision);
 		return -ENODEV;

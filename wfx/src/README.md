@@ -47,7 +47,7 @@ The WFx chip series can be connected via SPI or via SDIO.
 You have to declare the WFx chip in your device tree.
 
 Required properties:
-- `compatible`: Should be `"silabs,wfx-spi"`
+- `compatible`: Should be `"silabs,wf200"`
 - `reg`: Chip select address of device
 - `spi-max-frequency`: Maximum SPI clocking speed of device in Hz
 - `interrupts-extended`: Should contain interrupt line (`interrupt-parent` +
@@ -56,6 +56,7 @@ Required properties:
 Optional properties:
 - `reset-gpios`: phandle of gpio that will be used to reset chip during probe.
    Without this property, you may encounter issues with warm boot.
+   (Legacy: when compatible == "silabs,wfx-spi", the gpio is inverted.)
 
 Please consult [`Documentation/devicetree/bindings/spi/spi-bus.txt`][3] for optional
 SPI connection related properties,
@@ -86,7 +87,7 @@ case. Thus declaring Wfx chip in device tree is strongly recommended (and may
 become mandatory in the future).
 
 Required properties:
-- `compatible`: Should be `"silabs,wfx-sdio"`
+- `compatible`: Should be `"silabs,wf200"`
 - `reg`: Should be `1`
 
 In addition, it is recommended to declare a `mmc-pwrseq` on SDIO host above
@@ -137,9 +138,9 @@ Some properties are recognized either by SPI or SDIO versions:
   64 hexadecimal digits.
 
 WFx driver also supports `mac-address` and `local-mac-address` as described in
-[`Documentation/devicetree/binding/net/ethernet.txt`][5]
+[`Documentation/devicetree/bindings/net/ethernet.txt`][5]
 
-[5]: https://www.kernel.org/doc/Documentation/devicetree/binding/net/ethernet.txt
+[5]: https://www.kernel.org/doc/Documentation/devicetree/bindings/net/ethernet.txt
 
 ### How to change MAC address?
 
@@ -180,6 +181,66 @@ formated as a string of hexadecimal digits. So overall process is:
     $ dd if=/dev/urandom bs=8 count=1 > secret
     $ ( xxd -p secret; crc32 secret ) | tr -d '\n' > secret+crc32
     $ dd if=secret+crc32 of=/sys/kernel/debug/ieee80211/phy0/wfx/burn_slk_key
+
+### How to use nl80211 interface?
+
+The driver offer a nl80211 interface from some tasks. The simplest way to
+access to this API is to use the command `iw vendor`:
+
+     iw dev <devname> vendor recvbin <oui> <subcmd> <filename|-|hex data>
+     iw dev <devname> vendor recv <oui> <subcmd> <filename|-|hex data>
+     iw dev <devname> vendor send <oui> <subcmd> <filename|-|hex data>
+
+You can find necessary constants in `nl80211_wfx.h`:
+  - The `oui` is always `0x90fd9f`
+  - `subcmd` can be `0x11` (`PS_TIMEOUT`), `0x21` (`BURN_PREVENT_ROLLBACK`) and
+    `0x31` (`PTA_PARMS`)
+  - The argument of the `subcmd` contains a list of attribute in Netlink
+    attribute (`nla`) format: 16btts for size, 16bits for ID of the attribute,
+    then data and finally padding to align on 32bits.
+  - Each attribute is identified by a  number: `1 = PS_TIMEOUT`,
+   `2 = ROLLBACK_MAGIC`, `3 = PTA_SETTINGS`, `4 = PTA_PRIORITY`,
+   `5 = PTA_ENABLE`
+  - The size and the format of each attribute is defined in variable
+    `wfx_nl_policy`
+
+Thus, the command below run the command `PS_TIMEOUT` (`0x11`) with argument
+`PS_TIMEOUT` (ID `0x01`, then signed 32bit number) with value 0x64:
+
+    $ echo -ne '\x08\x00\x01\x00\x64\x00\x00\x00' | iw dev wlan0 vendor send 0x90fd9f 0x11 -
+
+You also run command `PS_TIMEOUT` (`0x11`) with `recv` to retreive value:
+
+    $ iw dev wlan0 vendor recv 0x001234 0x11 - < /dev/null
+    vendor response: 08 00 01 00 64 00 00 00
+
+Finally nothing prevents you to write and read value in same time:
+
+    $ echo -ne '\x08\x00\x01\x00\x40\x00\x00\x00' | iw dev wlan0 vendor recv 0x90fd9f 0x11 -
+    vendor response: 08 00 01 00 40 00 00 00
+
+Note that attribute ID not recognized by command is just ignored:
+
+    $ echo -ne '\x08\x00\x02\x00\xFF\xFF\xFF\xFF' | iw dev wlan0 vendor recv 0x90fd9f 0x11 -
+    vendor response: 08 00 01 00 40 00 00 00
+
+In case you want to get ride of `iw`, you can use `libnl` directly (in C,
+python, etc...). `libnl` allows to forge complete netlink packets.
+
+### How to prevent firmware rollback?
+
+You use the command `BURN_PREVENT_ROLLBACK` from the [nl80211 API]. This command
+will work only if it receive attribute `ROLLBACK_MAGIC` with value defined in
+HIF API (`0x5C8912F3`):
+
+    $ echo -ne '\x08\x00\x02\x00\xF3\x12\x89\x5C' | iw dev wlan0 vendor send 0x90fd9f 0x21 -
+
+### How to set PTA parameters?
+
+You use the command `PTA_PARMS` from the [nl80211 API] with the attributes
+` PTA_SETTINGS`, `PTA_PRIORITY` and `PTA_ENABLE`. See the HIF API for more
+information about content of these attribute.
+
 
 Advanced driver usage
 ---------------------
@@ -598,6 +659,9 @@ The diagram below show the driver architecture:
 Upstream status
 ---------------
 
-A driver based on version 2.3.2 of this driver will be included with Kernel
+A driver based on version 2.3.2 of this driver is included with Kernel
 5.5. Development is relocated in kernel mainstream. This driver only get
-backports of Linux driver.
+backports of mainstream driver.
+
+The driver 2.4.3 is more-or-les equivalent of mainstream 5.8.And the driver 2.5
+will be equivalent of mainstream 5.9.

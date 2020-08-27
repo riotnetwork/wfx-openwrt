@@ -1,13 +1,131 @@
+Changes in 2.5.2
+----------------
+
+  * Fix BlockAck negotiation when the device is AP and MFP is enabled. This fix
+    support for WPA3. (IPWHIFER-627)
+  * Fix BlockAack negotiation when MFP is disabled but BSS is MFP capable.
+    (IPWHIFER-229)
+
+Changes in 2.5.1
+----------------
+
+  * Fix potential failure during firmware loading. The bug was introduced in
+    2.5.
+
+Changes in 2.5
+--------------
+
+  * Enable A-MDPU reordering. This change relies on the BlockAck sessions
+    forwarded by the firmware. The firmware API < 3.4 don't forward this
+    information and cannot benefit of this feature (IPWHIFER-409)
+  * Enable TKIP/CCMP replay protection in kernel < 4.3. This change relies on
+    A-MPDU reordering. It will cause a performance hit on firmware API < 3.4.
+    This change will be also applied to kernel >= 4.3 in a next version of the
+    driver. (IPWHIFER-410)
+  * Fix potential wrong TIM value when a station fall asleep (IPWHIFER-561,
+    IPWHIFER-590)
+  * Introduce nl80211 vendor interface with these commands:
+     - burn anti-rollback bit (IPWHIFER-586)
+     - change the PTA settings (IPWHIFER-576, IPWHIFER-573)
+  * Add way to force FastPs mode and duration from debugfs (IPWHIFER-587)
+  * When using combo with a firmware >= 3.8, enable FastPS (PS-Poll was
+    preferred until now)
+  * Fix interfaces balancing while using combo mode (IPWHIFER-616)
+  * The file "tx_power_loop", in debugfs, provides an access to the status of
+    the amplifier for the calibration process.
+  * Load the firmware a little faster:
+      - in 64ms instead of 130ms using SDIO bus
+      - in 78ms instead of 115ms using SPI bus
+  * Improve robusteness against malformed HIF messages
+  * Fix handling of frames without valid RSSI
+  * Add a tracepoint to check balancing of the interfaces
+
+Changes in 2.4.3
+----------------
+
+  * Fix 'scan timeout' issue (introduced in 2.4.2)
+  * Fix AC priority (introduced in 2.4)
+
+Changes in 2.4.2
+----------------
+
+  * Fix dead lock when scan fail
+  * Fix compilation for some kernels < 4.6
+
+Changes in 2.4.1
+----------------
+
+  * Fix potential dead lock between join and scan (IPWHIFER-610)
+  * Fix PS parameters when multiple vif are in use (IPWHIFER-605)
+  * Fix error report whan stating AP
+  * Fix output of rx_stats (IPWHIFER-602)
+  * Remove false positive warnings (IPWHIFER-607)
+  * Add a knob to force LGI/SGI in internal version
+
+Changes in 2.4
+--------------
+
+  * Improve display of the exception and errors indications. They are now always
+    dumped (IPWHIFER-596)
+  * Fix support for Out-Of-Band IRQ when using SDIO bus (IOTPA_WIFI-286)
+  * Allow to use edge or level triggered IRQs (in SPI or in SDIO OOB). This can
+    be defined in device tree. If nothing is specified (or if IRQ controller
+    doesn't report trigger correctly), use level IRQ. You can check the
+    configuration in /proc/interrupts.
+  * Support for new Suspend/Resume indication sent for firmware 3.5 when chip
+    is too hot (IPWHIFER-591)
+  * Improve output of the file "counters" in debugfs. It now shows counters for
+    all interfaces. It also displays not yet named counters.
+  * In combo mode, legacy PS is automatically enabled. Now, it also
+    automatically switches to FastPS if AP does not support legacy PS
+    (IPWHIFER-588)
+  * Drop the prefix "WFX_" from driver version (displayed in dmesg and in
+    /sys/module/wfx/version)
+  * In combo mode, greatly improve bandwidth if both interfaces use same channel
+    PS is not enforced anymore. (IPWHIFER-485)
+  * Fix Block Ack usage in combo mode (IPWHIFER-562)
+  * Fix RTS threshold == 0, it disabled RTS instead of always enabling
+    (IPWHIFER-470)
+  * Support for associate/disassociate has been re-written (IPWHIFER-566,
+    IPWHIFER-257, IPWHIFER-262, IPWHIFER-568)
+  * Fix potential dead lock during unjoin (IPWHIFER-539, IPWHIFER-569,
+    IPWHIFER-580)
+  * Fix association with hidden SSID (IPWHIFER-542)
+  * Correctly take into account keep alive period provided by AP(IPWHIFER-307)
+  * Fix false "all retries were not consumed" errors
+  * Fix warning about potential mutex in use during driver unload
+  * Improve compliance with Open Firmware policy by adding support for
+    compatible string "silabs,wf200"
+  * MbedTLS library has been updated to release 2.16.5
+  * Support for hardware scan has been re-written (IPWHIFER-466, IPWHIFER-259,
+    IPWHIFER-380)
+  * Fix potential wrong output power after scan (IPWHIFER-311)
+  * Support for start/stop AP has been re-written (IPWHIFER-517, IPWHIFER-262,
+    IPWHIFER-570)
+  * Support for IBSS has been re-written (IPWHIFER-558)
+  * Support for filtering has been re-written (IPWHIFER-574, IPWHIFER-545)
+  * Support for beacon loss has been re-written (IPWHIFER-494)
+  * Support for power save has been re-written (IPWHIFER-554)
+  * Support for power save stations while AP (mainly the link-id handling) has
+    been re-written (IPWHIFER-493, IPWHIFER-492, IPWHIFER-564)
+  * Support for QoS queues (and Content After DTIM Beacon) has been re-written.
+    Fix warning "Vifs disagree about queue priority" (IPWHIFER-495,
+    IPWHIFER-565, IPWHIFER-337, IPWHIFER-567)
+  * Fix maximum reception throughput declared in ieee80211_supported_band.
+
 Changes in 2.3.5
 ----------------
 
   * Fix support of secure link
   * Fix change in rx_stats output introduced in 2.3.3
+  * This version is more-or-less aligned on wfx driver included in Linux kernel
+    5.5
 
 Changes in 2.3.4
 ----------------
 
   * Improve throughput by changing the way to build tx_retry_policies requests
+    (IPWHIFER-537, IPWHIFER-503)
 
 Changes in 2.3.3
 ----------------

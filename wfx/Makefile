@@ -9,6 +9,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=wfx
 PKG_RELEASE:=1
+PKG_BUILD_PARALLEL:=1
 
 #added backports
 STAMP_CONFIGURED_DEPENDS := $(STAGING_DIR)/usr/include/mac80211-backport/backport/autoconf.h
@@ -21,10 +22,9 @@ define KernelPackage/wfx
   SUBMENU:=Wireless Drivers
   TITLE:=Silabs WF200 Wireless Driver
   DEPENDS:= \
-	+wf200-firmware +kmod-mac80211 +kmod-cfg80211 +@DRIVER_11N_SUPPORT
+	+wf200-firmware +kmod-mac80211 +kmod-cfg80211 +@DRIVER_11N_SUPPORT +kmod-nl80211
   FILES:=$(PKG_BUILD_DIR)/wfx.ko
-  AUTOLOAD:=$(call AutoProbe,wfx)
-#AUTOLOAD:=$(call AutoProbe,mac80211 wfx)
+  AUTOLOAD:=$(call AutoProbe,mac80211 wfx)
   PROVIDES:=kmod-wfx
 endef
 
@@ -41,26 +41,28 @@ NOSTDINC_FLAGS = \
 	-include backport/autoconf.h \
 	-include backport/backport.h
 
-
 EXTRA_KCONFIG:= \
 	CONFIG_WFX=y
 
-#EXTRA_CFLAGS:= \
-#	$(patsubst CONFIG_%, -DCONFIG_%=1, $(patsubst %=m,%,$(filter %=m,$(EXTRA_KCONFIG)))) \
-#	$(patsubst CONFIG_%, -DCONFIG_%=1, $(patsubst %=y,%,$(filter %=y,$(EXTRA_KCONFIG)))) \
+EXTRA_CFLAGS:= \
+	$(patsubst CONFIG_%, -DCONFIG_%=1, $(patsubst %=m,%,$(filter %=m,$(EXTRA_KCONFIG)))) \
+	$(patsubst CONFIG_%, -DCONFIG_%=1, $(patsubst %=y,%,$(filter %=y,$(EXTRA_KCONFIG)))) \
 
-MAKE_OPTS:= \
-	$(KERNEL_MAKE_FLAGS) \
-	SUBDIRS="$(PKG_BUILD_DIR)" \
+#MAKE_OPTS:= \
+#	$(KERNEL_MAKE_FLAGS) \
+#	SUBDIRS="$(PKG_BUILD_DIR)" \
 #	EXTRA_CFLAGS="$(EXTRA_CFLAGS)" \
-	$(EXTRA_KCONFIG)
+#	$(EXTRA_KCONFIG)
 
 define Build/Compile
 #	$(MAKE) -C "$(LINUX_DIR)" \
 #		$(MAKE_OPTS) \
 #		modules
-	+$(MAKE) -C "$(LINUX_DIR)" \
-		$(MAKE_OPTS) \
+	+$(MAKE) $(PKG_JOBS) -C "$(LINUX_DIR)" \
+		$(KERNEL_MAKE_FLAGS) \
+		SUBDIRS="$(PKG_BUILD_DIR)" \
+		EXTRA_CFLAGS="$(EXTRA_CFLAGS)" \
+		$(EXTRA_KCONFIG) \
 		$(PKG_MAKE_FLAGS) \
 		NOSTDINC_FLAGS="$(NOSTDINC_FLAGS)" \
 		modules

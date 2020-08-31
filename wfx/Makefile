@@ -23,7 +23,8 @@ define KernelPackage/wfx
   DEPENDS:= \
 	+wf200-firmware +kmod-mac80211 +kmod-cfg80211 +@DRIVER_11N_SUPPORT
   FILES:=$(PKG_BUILD_DIR)/wfx.ko
-  AUTOLOAD:=$(call AutoProbe,mac80211 wfx)
+  AUTOLOAD:=$(call AutoProbe,wfx)
+#AUTOLOAD:=$(call AutoProbe,mac80211 wfx)
   PROVIDES:=kmod-wfx
 endef
 
@@ -42,16 +43,16 @@ NOSTDINC_FLAGS = \
 
 
 EXTRA_KCONFIG:= \
-	CONFIG_WFX=m
+	CONFIG_WFX=y
 
-EXTRA_CFLAGS:= \
-	$(patsubst CONFIG_%, -DCONFIG_%=1, $(patsubst %=m,%,$(filter %=m,$(EXTRA_KCONFIG)))) \
-	$(patsubst CONFIG_%, -DCONFIG_%=1, $(patsubst %=y,%,$(filter %=y,$(EXTRA_KCONFIG)))) \
+#EXTRA_CFLAGS:= \
+#	$(patsubst CONFIG_%, -DCONFIG_%=1, $(patsubst %=m,%,$(filter %=m,$(EXTRA_KCONFIG)))) \
+#	$(patsubst CONFIG_%, -DCONFIG_%=1, $(patsubst %=y,%,$(filter %=y,$(EXTRA_KCONFIG)))) \
 
 MAKE_OPTS:= \
 	$(KERNEL_MAKE_FLAGS) \
 	SUBDIRS="$(PKG_BUILD_DIR)" \
-	EXTRA_CFLAGS="$(EXTRA_CFLAGS)" \
+#	EXTRA_CFLAGS="$(EXTRA_CFLAGS)" \
 	$(EXTRA_KCONFIG)
 
 define Build/Compile

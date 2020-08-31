@@ -6,7 +6,6 @@
 #
 
 include $(TOPDIR)/rules.mk
-include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=wfx
 PKG_RELEASE:=1
@@ -23,12 +22,8 @@ define KernelPackage/wfx
   TITLE:=Silabs WF200 Wireless Driver
   DEPENDS:= \
 	+wf200-firmware +kmod-mac80211 +kmod-cfg80211 +@DRIVER_11N_SUPPORT
-#DEPENDS:=+kmod-mac80211 +@DRIVER_11N_SUPPORT
   FILES:=$(PKG_BUILD_DIR)/wfx.ko
   AUTOLOAD:=$(call AutoProbe,mac80211 wfx)
-
-#MAINTAINER:=Daniel de kock <daniel@riot.network>
-#KCONFIG:=CONFIG_WFX
   PROVIDES:=kmod-wfx
 endef
 
@@ -58,12 +53,6 @@ MAKE_OPTS:= \
 	SUBDIRS="$(PKG_BUILD_DIR)" \
 	EXTRA_CFLAGS="$(EXTRA_CFLAGS)" \
 	$(EXTRA_KCONFIG)
-
-#define Build/Prepare
-#	mkdir -p $(PKG_BUILD_DIR)
-#	$(CP) ./src/* $(PKG_BUILD_DIR)/
-#endef
-
 
 define Build/Compile
 #	$(MAKE) -C "$(LINUX_DIR)" \

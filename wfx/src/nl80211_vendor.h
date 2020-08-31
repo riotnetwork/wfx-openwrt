@@ -12,7 +12,7 @@
 #include <net/cfg80211.h>
 
 #include "hif_api_general.h"
-
+/*
 #if (KERNEL_VERSION(4, 20, 0) > LINUX_VERSION_CODE)
 
 #define __NLA_ENSURE(condition) BUILD_BUG_ON_ZERO(!(condition))
@@ -34,7 +34,7 @@
 }
 
 #endif
-
+*/
 #define WFX_NL80211_ID 0x90fd9f
 
 int wfx_nl_burn_antirollback(struct wiphy *wiphy, struct wireless_dev *widev,
@@ -64,7 +64,7 @@ static const struct nla_policy wfx_nl_policy[WFX_NL80211_ATTR_MAX] = {
 	[WFX_NL80211_ATTR_PTA_SETTINGS]   =
 		NLA_POLICY_EXACT_LEN(sizeof(struct hif_req_pta_settings)),
 };
-
+/*
 #if (KERNEL_VERSION(4, 20, 0) > LINUX_VERSION_CODE)
 static const struct wiphy_vendor_command wfx_nl80211_vendor_commands[] = {
 	{
@@ -78,6 +78,7 @@ static const struct wiphy_vendor_command wfx_nl80211_vendor_commands[] = {
 	},
 };
 #else
+*/
 static const struct wiphy_vendor_command wfx_nl80211_vendor_commands[] = {
 	{
 		.info.vendor_id = WFX_NL80211_ID,
@@ -105,6 +106,6 @@ static const struct wiphy_vendor_command wfx_nl80211_vendor_commands[] = {
 		.doit = wfx_nl_pta_params,
 	},
 };
-#endif
+//#endif
 
 #endif /* WFX_NL80211_VENDOR_H */

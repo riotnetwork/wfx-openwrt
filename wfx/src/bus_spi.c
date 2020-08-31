@@ -46,7 +46,7 @@ struct wfx_spi_priv {
 	bool need_swab;
 };
 
-#if (KERNEL_VERSION(4, 19, 14) > LINUX_VERSION_CODE)
+//#if (KERNEL_VERSION(4, 19, 14) > LINUX_VERSION_CODE)
 /*
  * Read of control register need a particular attention because it should be
  * done only after an IRQ raise. We can detect if this event happens by reading
@@ -54,6 +54,7 @@ struct wfx_spi_priv {
  * no data acess was done since IRQ raising). In add, this function optimize it
  * by doing only one SPI request.
  */
+/*
 static int wfx_spi_read_ctrl_reg(struct wfx_spi_priv *bus, u16 *dst)
 {
 	int i, ret = 0;
@@ -92,7 +93,7 @@ static int wfx_spi_read_ctrl_reg(struct wfx_spi_priv *bus, u16 *dst)
 	return ret;
 }
 #endif
-
+*/
 /*
  * WFx chip read data 16bits at time and place them directly into (little
  * endian) CPU register. So, chip expect byte order like "B1 B0 B3 B2" (while
@@ -117,22 +118,24 @@ static int wfx_spi_copy_from_io(void *priv, unsigned int addr,
 		.len            = count,
 	};
 	u16 *dst16 = dst;
+/*
 #if (KERNEL_VERSION(4, 19, 14) > LINUX_VERSION_CODE)
 	u8 *dst8 = dst;
 #endif
+*/
 	int ret, i;
 
 	WARN(count % 2, "buffer size must be a multiple of 2");
 
-#if (KERNEL_VERSION(4, 19, 14) > LINUX_VERSION_CODE)
+//#if (KERNEL_VERSION(4, 19, 14) > LINUX_VERSION_CODE)
 	/* Some SPI driver (and especially Raspberry one) have race conditions
 	 * during SPI transfers. It impact last byte of transfer. Work around
 	 * bellow try to detect and solve them.
 	 * See https://github.com/raspberrypi/linux/issues/2200
 	 */
-	if (addr == WFX_REG_IN_OUT_QUEUE)
-		dst8[count - 1] = 0xFF;
-#endif
+//	if (addr == WFX_REG_IN_OUT_QUEUE)
+//		dst8[count - 1] = 0xFF;
+//#endif
 
 	cpu_to_le16s(&regaddr);
 	if (bus->need_swab)
@@ -143,14 +146,14 @@ static int wfx_spi_copy_from_io(void *priv, unsigned int addr,
 	spi_message_add_tail(&t_msg, &m);
 	ret = spi_sync(bus->func, &m);
 
-#if (KERNEL_VERSION(4, 19, 14) > LINUX_VERSION_CODE)
+//#if (KERNEL_VERSION(4, 19, 14) > LINUX_VERSION_CODE)
 	/* If last byte has not been overwritten, read ctrl_reg manually
 	 */
-	if (addr == WFX_REG_IN_OUT_QUEUE && !ret && dst8[count - 1] == 0xFF) {
-		dev_warn(bus->core->dev, "SPI DMA error detected (and resolved)\n");
-		ret = wfx_spi_read_ctrl_reg(bus, (u16 *)(dst8 + count - 2));
-	}
-#endif
+//	if (addr == WFX_REG_IN_OUT_QUEUE && !ret && dst8[count - 1] == 0xFF) {
+//		dev_warn(bus->core->dev, "SPI DMA error detected (and resolved)\n");
+//		ret = wfx_spi_read_ctrl_reg(bus, (u16 *)(dst8 + count - 2));
+//	}
+//#endif
 
 	if (bus->need_swab && addr == WFX_REG_CONFIG)
 		for (i = 0; i < count / 2; i++)
@@ -256,9 +259,9 @@ static const struct hwbus_ops wfx_spi_hwbus_ops = {
 
 static int wfx_spi_probe(struct spi_device *func)
 {
-#if (KERNEL_VERSION(5, 5, 5) > LINUX_VERSION_CODE)
+//#if (KERNEL_VERSION(5, 5, 5) > LINUX_VERSION_CODE)
 	bool invert = spi_get_device_id(func)->driver_data & WFX_RESET_INVERTED;
-#endif
+//#endif
 	struct wfx_spi_priv *bus;
 	int ret;
 
@@ -290,17 +293,17 @@ static int wfx_spi_probe(struct spi_device *func)
 	if (!bus->gpio_reset) {
 		dev_warn(&func->dev, "try to load firmware anyway\n");
 	} else {
-#if (KERNEL_VERSION(5, 5, 5) > LINUX_VERSION_CODE)
+//#if (KERNEL_VERSION(5, 5, 5) > LINUX_VERSION_CODE)
 		gpiod_set_value_cansleep(bus->gpio_reset, invert ? 0 : 1);
 		usleep_range(100, 150);
 		gpiod_set_value_cansleep(bus->gpio_reset, invert ? 1 : 0);
-#else
-		if (spi_get_device_id(func)->driver_data & WFX_RESET_INVERTED)
-			gpiod_toggle_active_low(bus->gpio_reset);
-		gpiod_set_value_cansleep(bus->gpio_reset, 1);
-		usleep_range(100, 150);
-		gpiod_set_value_cansleep(bus->gpio_reset, 0);
-#endif
+//#else
+//		if (spi_get_device_id(func)->driver_data & WFX_RESET_INVERTED)
+//			gpiod_toggle_active_low(bus->gpio_reset);
+//		gpiod_set_value_cansleep(bus->gpio_reset, 1);
+//		usleep_range(100, 150);
+//		gpiod_set_value_cansleep(bus->gpio_reset, 0);
+//#endif
 		usleep_range(2000, 2500);
 	}
 

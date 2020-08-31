@@ -14,11 +14,11 @@
 #include "wfx.h"
 #include "hwio.h"
 
-#if (KERNEL_VERSION(4, 9, 0) > LINUX_VERSION_CODE)
-#define FIELD_GET(_mask, _reg) (typeof(_mask))(((_reg) & (_mask)) >> (__builtin_ffsll(_mask) - 1))
-#else
+//#if (KERNEL_VERSION(4, 9, 0) > LINUX_VERSION_CODE)
+//#define FIELD_GET(_mask, _reg) (typeof(_mask))(((_reg) & (_mask)) >> (__builtin_ffsll(_mask) - 1))
+//#else
 #include <linux/bitfield.h>
-#endif
+//#endif
 
 // Addresses below are in SRAM area
 #define WFX_DNLD_FIFO             0x09004000
@@ -115,11 +115,11 @@ static int get_firmware(struct wfx_dev *wdev, u32 keyset_chip,
 
 	snprintf(filename, sizeof(filename), "%s_%02X.sec",
 		 wdev->pdata.file_fw, keyset_chip);
-#if (KERNEL_VERSION(4, 18, 0) > LINUX_VERSION_CODE)
-	ret = request_firmware(fw, filename, wdev->dev);
-#else
+//#if (KERNEL_VERSION(4, 18, 0) > LINUX_VERSION_CODE)
+//	ret = request_firmware(fw, filename, wdev->dev);
+//#else
 	ret = firmware_request_nowarn(fw, filename, wdev->dev);
-#endif
+//#endif
 	if (ret) {
 		dev_info(wdev->dev, "can't load %s, falling back to %s.sec\n",
 			 filename, wdev->pdata.file_fw);

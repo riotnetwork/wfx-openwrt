@@ -26,50 +26,50 @@
 #define USEC_PER_TXOP 32 // see struct ieee80211_tx_queue_params
 #define USEC_PER_TU 1024
 
-#if (KERNEL_VERSION(4, 16, 0) > LINUX_VERSION_CODE)
-#define array_index_nospec(index, size) index
-#else
+//#if (KERNEL_VERSION(4, 16, 0) > LINUX_VERSION_CODE)
+//#define array_index_nospec(index, size) index
+//#else
 #include <linux/nospec.h>
-#endif
+//#endif
 
-#if (KERNEL_VERSION(4, 2, 0) > LINUX_VERSION_CODE)
-static inline void _ieee80211_hw_set(struct ieee80211_hw *hw,
-				     enum ieee80211_hw_flags flg)
-{
-	hw->flags |= flg;
-}
-#define ieee80211_hw_set(hw, flg)	_ieee80211_hw_set(hw, IEEE80211_HW_##flg)
-#endif
+//#if (KERNEL_VERSION(4, 2, 0) > LINUX_VERSION_CODE)
+//static inline void _ieee80211_hw_set(struct ieee80211_hw *hw,
+//				     enum ieee80211_hw_flags flg)
+//{
+//	hw->flags |= flg;
+//}
+//#define ieee80211_hw_set(hw, flg)	_ieee80211_hw_set(hw, IEEE80211_HW_##flg)
+//#endif
 
-#if (KERNEL_VERSION(4, 7, 0) > LINUX_VERSION_CODE)
-#define nl80211_band ieee80211_band
-#define NL80211_BAND_2GHZ IEEE80211_BAND_2GHZ
-#define NUM_NL80211_BANDS IEEE80211_NUM_BANDS
-#endif
+//#if (KERNEL_VERSION(4, 7, 0) > LINUX_VERSION_CODE)
+//#define nl80211_band ieee80211_band
+//#define NL80211_BAND_2GHZ IEEE80211_BAND_2GHZ
+//#define NUM_NL80211_BANDS IEEE80211_NUM_BANDS
+//#endif
 
-#if (KERNEL_VERSION(4, 1, 0) > LINUX_VERSION_CODE)
+//#if (KERNEL_VERSION(4, 1, 0) > LINUX_VERSION_CODE)
 // In kernels < 4.1, if we transate these define with 0, it is sufficient to
 // make cfg80211_get_bss() happy. However, their values in kernel > 4.1 are not
 // 0. So, only use them as parameters to cfg80211_get_bss().
-#define IEEE80211_BSS_TYPE_ANY 0
-#define IEEE80211_PRIVACY_ANY  0
-#endif
+//#define IEEE80211_BSS_TYPE_ANY 0
+//#define IEEE80211_PRIVACY_ANY  0
+//#endif
 
-#if (KERNEL_VERSION(4, 17, 0) > LINUX_VERSION_CODE)
-#define struct_size(p, member, n) \
-	(n * sizeof(*(p)->member) + __must_be_array((p)->member) + sizeof(*(p)))
-#endif
+//#if (KERNEL_VERSION(4, 17, 0) > LINUX_VERSION_CODE)
+//#define struct_size(p, member, n) \
+//	(n * sizeof(*(p)->member) + __must_be_array((p)->member) + sizeof(*(p)))
+//#endif
 
-#if KERNEL_VERSION(5, 3, 10) > LINUX_VERSION_CODE
-#if KERNEL_VERSION(4, 19, 83) > LINUX_VERSION_CODE || KERNEL_VERSION(4, 20, 0) < LINUX_VERSION_CODE
-#if KERNEL_VERSION(4, 14, 153) > LINUX_VERSION_CODE || KERNEL_VERSION(4, 15, 0) < LINUX_VERSION_CODE
-static inline bool skb_queue_empty_lockless(const struct sk_buff_head *list)
-{
-	return READ_ONCE(list->next) == (const struct sk_buff *) list;
-}
-#endif
-#endif
-#endif
+//#if KERNEL_VERSION(5, 3, 10) > LINUX_VERSION_CODE
+//#if KERNEL_VERSION(4, 19, 83) > LINUX_VERSION_CODE || KERNEL_VERSION(4, 20, 0) < //LINUX_VERSION_CODE
+//#if KERNEL_VERSION(4, 14, 153) > LINUX_VERSION_CODE || KERNEL_VERSION(4, 15, 0) < //LINUX_VERSION_CODE
+//static inline bool skb_queue_empty_lockless(const struct sk_buff_head *list)
+//{
+//	return READ_ONCE(list->next) == (const struct sk_buff *) list;
+//}
+//#endif
+//#endif
+//#endif
 
 struct hwbus_ops;
 

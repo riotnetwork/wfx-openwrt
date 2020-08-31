@@ -12,7 +12,7 @@
 #include "wfx.h"
 #include "sta.h"
 #include "hif_tx_mib.h"
-
+/*
 #if (KERNEL_VERSION(4, 13, 0) > LINUX_VERSION_CODE)
 static inline void *skb_put_data(struct sk_buff *skb, const void *data,
 				 unsigned int len)
@@ -24,19 +24,20 @@ static inline void *skb_put_data(struct sk_buff *skb, const void *data,
 	return tmp;
 }
 #endif
-
+*/
 static void __ieee80211_scan_completed_compat(struct ieee80211_hw *hw,
 					      bool aborted)
 {
-#if (KERNEL_VERSION(4, 8, 0) > LINUX_VERSION_CODE)
-	ieee80211_scan_completed(hw, aborted);
-#else
+
+//#if (KERNEL_VERSION(4, 8, 0) > LINUX_VERSION_CODE)
+//	ieee80211_scan_completed(hw, aborted);
+//#else
 	struct cfg80211_scan_info info = {
 		.aborted = aborted,
 	};
 
 	ieee80211_scan_completed(hw, &info);
-#endif
+//#endif
 }
 
 static int update_probe_tmpl(struct wfx_vif *wvif,
@@ -44,13 +45,13 @@ static int update_probe_tmpl(struct wfx_vif *wvif,
 {
 	struct sk_buff *skb;
 
-#if (KERNEL_VERSION(3, 19, 0) > LINUX_VERSION_CODE)
-	skb = ieee80211_probereq_get(wvif->wdev->hw, wvif->vif,
-				     NULL, 0, req->ie_len);
-#else
+//#if (KERNEL_VERSION(3, 19, 0) > LINUX_VERSION_CODE)
+//	skb = ieee80211_probereq_get(wvif->wdev->hw, wvif->vif,
+//				     NULL, 0, req->ie_len);
+//#else
 	skb = ieee80211_probereq_get(wvif->wdev->hw, wvif->vif->addr,
 				     NULL, 0, req->ie_len);
-#endif
+//#endif
 	if (!skb)
 		return -ENOMEM;
 

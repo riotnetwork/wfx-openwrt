@@ -18,13 +18,13 @@ int wfx_nl_burn_antirollback(struct wiphy *wiphy, struct wireless_dev *widev,
 	u32 magic;
 	int rc;
 
-#if (KERNEL_VERSION(4, 12, 0) > LINUX_VERSION_CODE)
-	rc = nla_parse(tb, WFX_NL80211_ATTR_MAX - 1, data, data_len,
-		       wfx_nl_policy);
-#else
+//#if (KERNEL_VERSION(4, 12, 0) > LINUX_VERSION_CODE)
+//	rc = nla_parse(tb, WFX_NL80211_ATTR_MAX - 1, data, data_len,
+//		       wfx_nl_policy);
+//#else
 	rc = nla_parse(tb, WFX_NL80211_ATTR_MAX - 1, data, data_len,
 		       wfx_nl_policy, NULL);
-#endif
+//#endif
 	if (rc)
 		return rc;
 	if (!tb[WFX_NL80211_ATTR_ROLLBACK_MAGIC])
@@ -50,13 +50,13 @@ int wfx_nl_pta_params(struct wiphy *wiphy, struct wireless_dev *widev,
 	struct nlattr *nla;
 	int rc;
 
-#if (KERNEL_VERSION(4, 12, 0) > LINUX_VERSION_CODE)
-	rc = nla_parse(tb, WFX_NL80211_ATTR_MAX - 1, data, data_len,
-		       wfx_nl_policy);
-#else
+//#if (KERNEL_VERSION(4, 12, 0) > LINUX_VERSION_CODE)
+//	rc = nla_parse(tb, WFX_NL80211_ATTR_MAX - 1, data, data_len,
+//		       wfx_nl_policy);
+//#else
 	rc = nla_parse(tb, WFX_NL80211_ATTR_MAX - 1, data, data_len,
 		       wfx_nl_policy, NULL);
-#endif
+//#endif
 	if (rc)
 		return rc;
 	nla = tb[WFX_NL80211_ATTR_PTA_ENABLE];
@@ -69,10 +69,10 @@ int wfx_nl_pta_params(struct wiphy *wiphy, struct wireless_dev *widev,
 	if (rc)
 		return rc;
 	nla = tb[WFX_NL80211_ATTR_PTA_SETTINGS];
-#if (KERNEL_VERSION(4, 20, 0) > LINUX_VERSION_CODE)
-	if (nla && nla_len(nla) != sizeof(wdev->pta_settings))
-		return -EINVAL;
-#endif
+//#if (KERNEL_VERSION(4, 20, 0) > LINUX_VERSION_CODE)
+//	if (nla && nla_len(nla) != sizeof(wdev->pta_settings))
+//		return -EINVAL;
+//#endif
 	if (nla) {
 		// User has to care about endianness of data it send.
 		memcpy(&wdev->pta_settings, nla_data(nla),

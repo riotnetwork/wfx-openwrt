@@ -17,9 +17,9 @@
 #include "traces.h"
 #include "hif_tx_mib.h"
 
-#if (KERNEL_VERSION(4, 16, 0) > LINUX_VERSION_CODE)
-#define sizeof_field(type, member) FIELD_SIZEOF(type, member)
-#endif
+//#if (KERNEL_VERSION(4, 16, 0) > LINUX_VERSION_CODE)
+//#define sizeof_field(type, member) FIELD_SIZEOF(type, member)
+//#endif
 
 static int wfx_get_hw_rate(struct wfx_dev *wdev,
 			   const struct ieee80211_tx_rate *rate)
@@ -521,7 +521,7 @@ void wfx_tx_confirm_cb(struct wfx_dev *wdev, const struct hif_cnf_tx *arg)
 	memset(tx_info->pad, 0, sizeof(tx_info->pad));
 
 	if (!arg->status) {
-#if (KERNEL_VERSION(3, 19, 0) <= LINUX_VERSION_CODE)
+//#if (KERNEL_VERSION(3, 19, 0) <= LINUX_VERSION_CODE)
 		tx_info->status.tx_time =
 			le32_to_cpu(arg->media_delay) -
 			le32_to_cpu(arg->tx_queue_delay);
@@ -529,10 +529,10 @@ void wfx_tx_confirm_cb(struct wfx_dev *wdev, const struct hif_cnf_tx *arg)
 			tx_info->flags |= IEEE80211_TX_STAT_NOACK_TRANSMITTED;
 		else
 			tx_info->flags |= IEEE80211_TX_STAT_ACK;
-#else
-		if (!(tx_info->flags & IEEE80211_TX_CTL_NO_ACK))
-			tx_info->flags |= IEEE80211_TX_STAT_ACK;
-#endif
+//#else
+//		if (!(tx_info->flags & IEEE80211_TX_CTL_NO_ACK))
+//			tx_info->flags |= IEEE80211_TX_STAT_ACK;
+//#endif
 	} else if (arg->status == HIF_STATUS_TX_FAIL_REQUEUE) {
 		WARN(!arg->tx_result_flags.requeue,
 		     "incoherent status and result_flags");

@@ -15,19 +15,19 @@
 
 #include "hif_api_general.h"
 
-#if (KERNEL_VERSION(4, 6, 0) > LINUX_VERSION_CODE)
-static inline int devm_add_action_or_reset(struct device *dev,
-					   void (*action)(void *), void *data)
-{
-	int ret;
-
-	ret = devm_add_action(dev, action, data);
-	if (ret)
-		action(data);
-
-	return ret;
-}
-#endif
+//#if (KERNEL_VERSION(4, 6, 0) > LINUX_VERSION_CODE)
+//static inline int devm_add_action_or_reset(struct device *dev,
+//					   void (*action)(void *), void *data)
+//{
+//	int ret;
+//
+//	ret = devm_add_action(dev, action, data);
+//	if (ret)
+//		action(data);
+//
+//	return ret;
+//}
+//#endif
 
 struct wfx_dev;
 struct hwbus_ops;

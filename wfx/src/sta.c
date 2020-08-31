@@ -20,8 +20,8 @@
 #include "hif_tx_mib.h"
 
 #define HIF_MAX_ARP_IP_ADDRTABLE_ENTRIES 2
-
-#if (KERNEL_VERSION(4, 15, 0) > LINUX_VERSION_CODE)
+/*
+//#if (KERNEL_VERSION(4, 15, 0) > LINUX_VERSION_CODE)
 static __always_inline void assign_bit(long nr, volatile unsigned long *addr,
 				       bool value)
 {
@@ -31,7 +31,7 @@ static __always_inline void assign_bit(long nr, volatile unsigned long *addr,
 		clear_bit(nr, addr);
 }
 #endif
-
+*/
 u32 wfx_rate_mask_to_hw(struct wfx_dev *wdev, u32 rates)
 {
 	int i;
@@ -312,11 +312,11 @@ void wfx_event_report_rssi(struct wfx_vif *wvif, u8 raw_rcpi_rssi)
 		cqm_evt = NL80211_CQM_RSSI_THRESHOLD_EVENT_LOW;
 	else
 		cqm_evt = NL80211_CQM_RSSI_THRESHOLD_EVENT_HIGH;
-#if (KERNEL_VERSION(4, 11, 0) > LINUX_VERSION_CODE)
-	ieee80211_cqm_rssi_notify(wvif->vif, cqm_evt, GFP_KERNEL);
-#else
+//#if (KERNEL_VERSION(4, 11, 0) > LINUX_VERSION_CODE)
+//	ieee80211_cqm_rssi_notify(wvif->vif, cqm_evt, GFP_KERNEL);
+//#else
 	ieee80211_cqm_rssi_notify(wvif->vif, cqm_evt, rcpi_rssi, GFP_KERNEL);
-#endif
+//#endif
 }
 
 static void wfx_beacon_loss_work(struct work_struct *work)
@@ -412,12 +412,12 @@ int wfx_sta_add(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 
 	sta_priv->vif_id = wvif->id;
 
-#if (KERNEL_VERSION(3, 20, 0) <= LINUX_VERSION_CODE)
+//#if (KERNEL_VERSION(3, 20, 0) <= LINUX_VERSION_CODE)
 	// Kernel < 3.20 may encounter problems to negociate BlockAck with MFP
 	// enabled. You may backport 64a8cef41 to solve it.
 	if (vif->type == NL80211_IFTYPE_STATION)
 		hif_set_mfp(wvif, sta->mfp, sta->mfp);
-#endif
+//#endif
 
 	// In station mode, the firmware interprets new link-id as a TDLS peer.
 	if (vif->type == NL80211_IFTYPE_STATION && !sta->tdls)
@@ -426,11 +426,11 @@ int wfx_sta_add(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	wvif->link_id_map |= BIT(sta_priv->link_id);
 	WARN_ON(!sta_priv->link_id);
 	WARN_ON(sta_priv->link_id >= HIF_LINK_ID_MAX);
-#if (KERNEL_VERSION(3, 20, 0) > LINUX_VERSION_CODE)
-	hif_map_link(wvif, sta->addr, 0, sta_priv->link_id);
-#else
+//#if (KERNEL_VERSION(3, 20, 0) > LINUX_VERSION_CODE)
+//	hif_map_link(wvif, sta->addr, 0, sta_priv->link_id);
+//#else
 	hif_map_link(wvif, sta->addr, sta->mfp ? 2 : 0, sta_priv->link_id);
-#endif
+//#endif
 
 	return 0;
 }
@@ -613,11 +613,11 @@ void wfx_bss_info_changed(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 				 __func__);
 	}
 
-#if (KERNEL_VERSION(4, 11, 0) <= LINUX_VERSION_CODE)
+//#if (KERNEL_VERSION(4, 11, 0) <= LINUX_VERSION_CODE)
 	if (changed & BSS_CHANGED_KEEP_ALIVE)
 		hif_keep_alive_period(wvif, info->max_idle_period *
 					    USEC_PER_TU / USEC_PER_MSEC);
-#endif
+//#endif
 
 	if (changed & BSS_CHANGED_ERP_CTS_PROT)
 		hif_erp_use_protection(wvif, info->use_cts_prot);
@@ -695,7 +695,7 @@ void wfx_suspend_resume_mc(struct wfx_vif *wvif, enum sta_notify_cmd notify_cmd)
 	wvif->after_dtim_tx_allowed = true;
 	wfx_bh_request_tx(wvif->wdev);
 }
-
+/*
 #if (KERNEL_VERSION(4, 4, 0) > LINUX_VERSION_CODE)
 int wfx_ampdu_action(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		     enum ieee80211_ampdu_mlme_action action,
@@ -709,10 +709,11 @@ int wfx_ampdu_action(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		     struct ieee80211_sta *sta, u16 tid, u16 *ssn,
 		     u8 buf_size, bool amsdu)
 #else
+*/
 int wfx_ampdu_action(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		     struct ieee80211_ampdu_params *params)
-#endif
-#endif
+//#endif
+//#endif
 {
 	/* Aggregation is implemented fully in firmware,
 	 * including block ack negotiation. Do not allow
@@ -777,9 +778,9 @@ int wfx_add_interface(struct ieee80211_hw *hw, struct ieee80211_vif *vif)
 	struct wfx_vif *wvif = (struct wfx_vif *)vif->drv_priv;
 
 	vif->driver_flags |= IEEE80211_VIF_BEACON_FILTER |
-#if (KERNEL_VERSION(3, 19, 0) <= LINUX_VERSION_CODE)
+//#if (KERNEL_VERSION(3, 19, 0) <= LINUX_VERSION_CODE)
 			     IEEE80211_VIF_SUPPORTS_UAPSD |
-#endif
+//#endif
 			     IEEE80211_VIF_SUPPORTS_CQM_RSSI;
 
 	mutex_lock(&wdev->conf_mutex);

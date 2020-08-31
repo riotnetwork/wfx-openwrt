@@ -49,22 +49,22 @@ void wfx_sta_notify(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		    enum sta_notify_cmd cmd, struct ieee80211_sta *sta);
 int wfx_set_tim(struct ieee80211_hw *hw, struct ieee80211_sta *sta, bool set);
 
-#if (KERNEL_VERSION(4, 4, 0) > LINUX_VERSION_CODE)
-int wfx_ampdu_action(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
-		     enum ieee80211_ampdu_mlme_action action,
-		     struct ieee80211_sta *sta, u16 tid, u16 *ssn, u8 buf_size);
-#else
-#if (KERNEL_VERSION(4, 4, 69) > LINUX_VERSION_CODE) || \
-	(KERNEL_VERSION(4, 6, 0) > LINUX_VERSION_CODE && KERNEL_VERSION(4, 5, 0) <= LINUX_VERSION_CODE)
-int wfx_ampdu_action(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
-		     enum ieee80211_ampdu_mlme_action action,
-		     struct ieee80211_sta *sta, u16 tid, u16 *ssn, u8 buf_size,
-		     bool amsdu);
-#else
+//#if (KERNEL_VERSION(4, 4, 0) > LINUX_VERSION_CODE)
+//int wfx_ampdu_action(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+//		     enum ieee80211_ampdu_mlme_action action,
+//		     struct ieee80211_sta *sta, u16 tid, u16 *ssn, u8 buf_size);
+//#else
+//#if (KERNEL_VERSION(4, 4, 69) > LINUX_VERSION_CODE) || \
+//	(KERNEL_VERSION(4, 6, 0) > LINUX_VERSION_CODE && KERNEL_VERSION(4, 5, 0) <= LINUX_VERSION_CODE)
+//int wfx_ampdu_action(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+//		     enum ieee80211_ampdu_mlme_action action,
+//		     struct ieee80211_sta *sta, u16 tid, u16 *ssn, u8 buf_size,
+//		     bool amsdu);
+//#else
 int wfx_ampdu_action(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		     struct ieee80211_ampdu_params *params);
-#endif
-#endif
+//#endif
+//#endif
 int wfx_add_chanctx(struct ieee80211_hw *hw,
 		    struct ieee80211_chanctx_conf *conf);
 void wfx_remove_chanctx(struct ieee80211_hw *hw,

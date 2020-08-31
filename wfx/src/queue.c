@@ -13,14 +13,14 @@
 #include "sta.h"
 #include "data_tx.h"
 #include "traces.h"
-
+/*
 #if (KERNEL_VERSION(3, 19, 0) > LINUX_VERSION_CODE)
 static inline s64 ktime_ms_delta(const ktime_t later, const ktime_t earlier)
 {
 	return ktime_to_ms(ktime_sub(later, earlier));
 }
 #endif
-
+*/
 void wfx_tx_lock(struct wfx_dev *wdev)
 {
 	atomic_inc(&wdev->tx_lock);

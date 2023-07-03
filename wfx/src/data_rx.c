@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Datapath implementation.
+ * Data receiving implementation.
  *
- * Copyright (c) 2017-2019, Silicon Laboratories, Inc.
+ * Copyright (c) 2017-2020, Silicon Laboratories, Inc.
  * Copyright (c) 2010, ST-Ericsson
  */
 #include <linux/version.h>
@@ -18,6 +18,9 @@ static void wfx_rx_handle_ba(struct wfx_vif *wvif, struct ieee80211_mgmt *mgmt)
 {
 	int params, tid;
 
+	if (wfx_api_older_than(wvif->wdev, 3, 6))
+		return;
+
 	switch (mgmt->u.action.u.addba_req.action_code) {
 	case WLAN_ACTION_ADDBA_REQ:
 		params = le16_to_cpu(mgmt->u.action.u.addba_req.capab);
@@ -32,8 +35,7 @@ static void wfx_rx_handle_ba(struct wfx_vif *wvif, struct ieee80211_mgmt *mgmt)
 	}
 }
 
-void wfx_rx_cb(struct wfx_vif *wvif,
-	       const struct hif_ind_rx *arg, struct sk_buff *skb)
+void wfx_rx_cb(struct wfx_vif *wvif, const struct wfx_hif_ind_rx *arg, struct sk_buff *skb)
 {
 	struct ieee80211_rx_status *hdr = IEEE80211_SKB_RXCB(skb);
 	struct ieee80211_hdr *frame = (struct ieee80211_hdr *)skb->data;
@@ -42,7 +44,7 @@ void wfx_rx_cb(struct wfx_vif *wvif,
 	memset(hdr, 0, sizeof(*hdr));
 
 	if (arg->status == HIF_STATUS_RX_FAIL_MIC)
-		hdr->flag |= RX_FLAG_MMIC_ERROR;
+		hdr->flag |= RX_FLAG_MMIC_ERROR | RX_FLAG_IV_STRIPPED;
 	else if (arg->status)
 		goto drop;
 
@@ -52,15 +54,14 @@ void wfx_rx_cb(struct wfx_vif *wvif,
 	}
 
 	hdr->band = NL80211_BAND_2GHZ;
-	hdr->freq = ieee80211_channel_to_frequency(arg->channel_number,
-						   hdr->band);
+	hdr->freq = ieee80211_channel_to_frequency(arg->channel_number, hdr->band);
 
 	if (arg->rxed_rate >= 14) {
-//#if (KERNEL_VERSION(4, 12, 0) > LINUX_VERSION_CODE)
-//		hdr->flag |= RX_FLAG_HT;
-//#else
+#if (KERNEL_VERSION(4, 12, 0) > LINUX_VERSION_CODE)
+		hdr->flag |= RX_FLAG_HT;
+#else
 		hdr->encoding = RX_ENC_HT;
-//#endif
+#endif
 		hdr->rate_idx = arg->rxed_rate - 14;
 	} else if (arg->rxed_rate >= 4) {
 		hdr->rate_idx = arg->rxed_rate - 2;
@@ -75,15 +76,12 @@ void wfx_rx_cb(struct wfx_vif *wvif,
 	hdr->signal = arg->rcpi_rssi / 2 - 110;
 	hdr->antenna = 0;
 
-	if (arg->rx_flags.encryp)
-//#if (KERNEL_VERSION(4, 3, 0) > LINUX_VERSION_CODE)
-//		hdr->flag |= RX_FLAG_DECRYPTED;
-//#else
-		hdr->flag |= RX_FLAG_DECRYPTED | RX_FLAG_PN_VALIDATED;
-//#endif
+	if (arg->encryp)
+		hdr->flag |= RX_FLAG_DECRYPTED;
 
-	// Block ack negociation is offloaded by the firmware. However,
-	// re-ordering must be done by the mac80211.
+	/* Block ack negotiation is offloaded by the firmware. However, re-ordering must be done by
+	 * the mac80211.
+	 */
 	if (ieee80211_is_action(frame->frame_control) &&
 	    mgmt->u.action.category == WLAN_CATEGORY_BACK &&
 	    skb->len > IEEE80211_MIN_ACTION_SIZE) {

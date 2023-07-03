@@ -1,6 +1,4 @@
 # SPDX-License-Identifier: GPL-2.0
-
-
 wfx-objs := \
 	bh.o \
 	hwio.o \
@@ -43,5 +41,5 @@ ccflags-y += \
 
 ccflags-$(CONFIG_WF200_DEBUG) := -DDEBUG
 
-obj-$(CONFIG_WFX) += wfx.o
+obj-m += wfx.o
 

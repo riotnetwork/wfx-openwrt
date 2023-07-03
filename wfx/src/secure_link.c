@@ -1,17 +1,23 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2019, Silicon Laboratories, Inc.
+ * Copyright (c) 2019-2020, Silicon Laboratories, Inc.
  */
 
 #include <linux/of.h>
 #include <linux/module.h>
 #include <linux/random.h>
-#include <crypto/sha.h>
+#include <linux/version.h>
 #include <mbedtls/md.h>
 #include <mbedtls/ecdh.h>
 #include <mbedtls/ccm.h>
 #include <mbedtls/sha256.h>
 #include <mbedtls/sha512.h>
+
+#if (KERNEL_VERSION(5, 11, 0) > LINUX_VERSION_CODE)
+#include <crypto/sha.h>
+#else
+#include <crypto/sha2.h>
+#endif
 
 #include "secure_link.h"
 #include "wfx.h"
@@ -45,7 +51,7 @@ int wfx_is_secure_command(struct wfx_dev *wdev, int cmd_id)
 	return test_bit(cmd_id, wdev->sl.commands);
 }
 
-int wfx_sl_decode(struct wfx_dev *wdev, struct hif_sl_msg *m)
+int wfx_sl_decode(struct wfx_dev *wdev, struct wfx_hif_sl_msg *m)
 {
 	int ret;
 	size_t clear_len = le16_to_cpu(m->len);
@@ -56,7 +62,7 @@ int wfx_sl_decode(struct wfx_dev *wdev, struct hif_sl_msg *m)
 
 	WARN(m->hdr.encrypted != 0x02, "packet is not encrypted");
 
-	// Other bytes of nonce are 0
+	/* Other bytes of nonce are 0 */
 	nonce[1] = m->hdr.seqnum;
 	if (wdev->sl.rx_seqnum != m->hdr.seqnum)
 		dev_warn(wdev->dev, "wrong encrypted message sequence: %d != %d\n",
@@ -66,10 +72,9 @@ int wfx_sl_decode(struct wfx_dev *wdev, struct hif_sl_msg *m)
 		schedule_work(&wdev->sl.key_renew_work);
 
 	memcpy(output, &m->len, sizeof(m->len));
-	ret = mbedtls_ccm_auth_decrypt(&wdev->sl.ccm_ctxt, payload_len,
-			(u8 *)nonce, sizeof(nonce), NULL, 0,
-			m->payload, output + sizeof(m->len),
-			tag, sizeof(struct hif_sl_tag));
+	ret = mbedtls_ccm_auth_decrypt(&wdev->sl.ccm_ctxt, payload_len, (u8 *)nonce, sizeof(nonce),
+				       NULL, 0, m->payload, output + sizeof(m->len),
+				       tag, sizeof(struct wfx_hif_sl_tag));
 	if (ret) {
 		dev_err(wdev->dev, "mbedtls error: %08x\n", ret);
 		return -EIO;
@@ -80,10 +85,9 @@ int wfx_sl_decode(struct wfx_dev *wdev, struct hif_sl_msg *m)
 }
 
 int wfx_sl_encode(struct wfx_dev *wdev,
-		  const struct hif_msg *input, struct hif_sl_msg *output)
+		  const struct wfx_hif_msg *input, struct wfx_hif_sl_msg *output)
 {
-	int payload_len =
-		round_up(le16_to_cpu(input->len) - sizeof(input->len), 16);
+	int payload_len = round_up(le16_to_cpu(input->len) - sizeof(input->len), 16);
 	u8 *tag = output->payload + payload_len;
 	u32 nonce[3] = { };
 	int ret;
@@ -91,16 +95,16 @@ int wfx_sl_encode(struct wfx_dev *wdev,
 	output->hdr.encrypted = 0x1;
 	output->len = input->len;
 	output->hdr.seqnum = wdev->sl.tx_seqnum;
-	// Other bytes of nonce are 0
+	/* Other bytes of nonce are 0 */
 	nonce[2] = wdev->sl.tx_seqnum;
 	wdev->sl.tx_seqnum++;
 	if (wdev->sl.tx_seqnum == slk_renew_period)
 		schedule_work(&wdev->sl.key_renew_work);
 
 	ret = mbedtls_ccm_encrypt_and_tag(&wdev->sl.ccm_ctxt, payload_len,
-			(u8 *)nonce, sizeof(nonce), NULL, 0,
-			(u8 *)input + sizeof(input->len), output->payload,
-			tag, sizeof(struct hif_sl_tag));
+					  (u8 *)nonce, sizeof(nonce), NULL, 0,
+					  (u8 *)input + sizeof(input->len), output->payload,
+					  tag, sizeof(struct wfx_hif_sl_tag));
 	if (ret) {
 		dev_err(wdev->dev, "mbedtls error: %08x\n", ret);
 		return -EIO;
@@ -108,18 +112,15 @@ int wfx_sl_encode(struct wfx_dev *wdev,
 	return 0;
 }
 
-static int wfx_sl_get_pubkey_mac(struct wfx_dev *wdev,
-				 const u8 *pubkey, u8 *mac)
+static int wfx_sl_get_pubkey_mac(struct wfx_dev *wdev, const u8 *pubkey, u8 *mac)
 {
-	return mbedtls_md_hmac(
-			mbedtls_md_info_from_type(MBEDTLS_MD_SHA512),
-			wdev->pdata.slk_key, sizeof(wdev->pdata.slk_key),
-			pubkey, API_HOST_PUB_KEY_SIZE,
-			mac);
+	return mbedtls_md_hmac(mbedtls_md_info_from_type(MBEDTLS_MD_SHA512),
+			       wdev->pdata.slk_key, sizeof(wdev->pdata.slk_key),
+			       pubkey, API_HOST_PUB_KEY_SIZE,
+			       mac);
 }
 
-int wfx_sl_check_pubkey(struct wfx_dev *wdev,
-			const u8 *pubkey_orig, const u8 *mac)
+int wfx_sl_check_pubkey(struct wfx_dev *wdev, const u8 *pubkey_orig, const u8 *mac)
 {
 	int ret;
 	size_t olen;
@@ -136,8 +137,9 @@ int wfx_sl_check_pubkey(struct wfx_dev *wdev,
 	if (ret)
 		goto end;
 
-	// FIXME: save Qp.Y or (reset it), concat it with ncp_public_key and
-	// use mbedtls_ecdh_read_public.
+	/* FIXME: save Qp.Y or (reset it), concat it with ncp_public_key and use
+	 * mbedtls_ecdh_read_public.
+	 */
 	memreverse(pubkey, sizeof(pubkey));
 	ret = mbedtls_mpi_read_binary(&wdev->sl.edch_ctxt.Qp.X, pubkey, API_NCP_PUB_KEY_SIZE);
 	if (ret)
@@ -146,9 +148,8 @@ int wfx_sl_check_pubkey(struct wfx_dev *wdev,
 	if (ret)
 		goto end;
 
-	ret = mbedtls_ecdh_calc_secret(&wdev->sl.edch_ctxt, &olen,
-			secret, sizeof(secret),
-			mbedtls_random, NULL);
+	ret = mbedtls_ecdh_calc_secret(&wdev->sl.edch_ctxt, &olen, secret, sizeof(secret),
+				       mbedtls_random, NULL);
 	if (ret)
 		goto end;
 
@@ -160,9 +161,9 @@ int wfx_sl_check_pubkey(struct wfx_dev *wdev,
 	wdev->sl.rx_seqnum = 0;
 	wdev->sl.tx_seqnum = 0;
 	mbedtls_ccm_free(&wdev->sl.ccm_ctxt);
-	// Use the lower 16 bytes of the sha256 of the secret for AES key
+	/* Use the lower 16 bytes of the sha256 of the secret for AES key */
 	ret = mbedtls_ccm_setkey(&wdev->sl.ccm_ctxt, MBEDTLS_CIPHER_ID_AES,
-			secret_digest, 16 * BITS_PER_BYTE);
+				 secret_digest, 16 * BITS_PER_BYTE);
 
 end:
 	complete(&wdev->sl.key_renew_done);
@@ -181,8 +182,7 @@ static int wfx_sl_key_exchange(struct wfx_dev *wdev)
 	if (ret)
 		goto err;
 	wdev->sl.edch_ctxt.point_format = MBEDTLS_ECP_PF_COMPRESSED;
-	ret = mbedtls_ecdh_make_public(&wdev->sl.edch_ctxt, &olen,
-				       pubkey, sizeof(pubkey),
+	ret = mbedtls_ecdh_make_public(&wdev->sl.edch_ctxt, &olen, pubkey, sizeof(pubkey),
 				       mbedtls_random, NULL);
 	if (ret || olen != sizeof(pubkey))
 		goto err;
@@ -190,7 +190,7 @@ static int wfx_sl_key_exchange(struct wfx_dev *wdev)
 	ret = wfx_sl_get_pubkey_mac(wdev, pubkey + 2, mac);
 	if (ret)
 		goto err;
-	ret = hif_sl_send_pub_keys(wdev, pubkey + 2, mac);
+	ret = wfx_hif_sl_send_pub_keys(wdev, pubkey + 2, mac);
 	if (ret)
 		goto err;
 	if (wdev->poll_irq)
@@ -237,14 +237,12 @@ static void wfx_sl_init_cfg(struct wfx_dev *wdev)
 	clear_bit(HIF_IND_ID_RX, sl_commands);
 	clear_bit(HIF_CNF_ID_TX, sl_commands);
 	clear_bit(HIF_CNF_ID_MULTI_TRANSMIT, sl_commands);
-	hif_sl_config(wdev, sl_commands);
+	wfx_hif_sl_config(wdev, sl_commands);
 	bitmap_copy(wdev->sl.commands, sl_commands, 256);
 }
 
 int wfx_sl_init(struct wfx_dev *wdev)
 {
-	int link_mode = wdev->hw_caps.capabilities.link_mode;
-
 	INIT_WORK(&wdev->sl.key_renew_work, wfx_sl_renew_key);
 	init_completion(&wdev->sl.key_renew_done);
 	if (!memzcmp(wdev->pdata.slk_key, sizeof(wdev->pdata.slk_key)))
@@ -253,13 +251,13 @@ int wfx_sl_init(struct wfx_dev *wdev)
 		dev_info(wdev->dev, "this driver only support secure link API >= 2.0\n");
 		return -EIO;
 	}
-	if (link_mode == SEC_LINK_ENFORCED) {
+	if (wdev->hw_caps.link_mode == SEC_LINK_ENFORCED) {
 		bitmap_set(wdev->sl.commands, HIF_REQ_ID_SL_CONFIGURE, 1);
 		if (wfx_sl_key_exchange(wdev))
 			return -EIO;
 		wfx_sl_init_cfg(wdev);
-	} else if (link_mode == SEC_LINK_EVAL) {
-		if (hif_sl_set_mac_key(wdev, wdev->pdata.slk_key, SL_MAC_KEY_DEST_RAM))
+	} else if (wdev->hw_caps.link_mode == SEC_LINK_EVAL) {
+		if (wfx_hif_sl_set_mac_key(wdev, wdev->pdata.slk_key, SL_MAC_KEY_DEST_RAM))
 			return -EIO;
 		if (wfx_sl_key_exchange(wdev))
 			return -EIO;

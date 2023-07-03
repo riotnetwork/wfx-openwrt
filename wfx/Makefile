@@ -1,10 +1,3 @@
-#
-# Copyright (C) 2008-2012 OpenWrt.org
-#
-# This is free software, licensed under the GNU General Public License v2.
-# See /LICENSE for more information.
-#
-
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=wfx
@@ -32,7 +25,7 @@ define KernelPackage/wfx/description
  Silabs WF200 Wireless Driver
 endef
 
-NOSTDINC_FLAGS = \
+NOSTDINC_FLAGS := \
 	-I$(PKG_BUILD_DIR) \
 	-I$(STAGING_DIR)/usr/include/mac80211-backport/uapi \
 	-I$(STAGING_DIR)/usr/include/mac80211-backport \
@@ -41,10 +34,15 @@ NOSTDINC_FLAGS = \
 	-include backport/autoconf.h \
 	-include backport/backport.h
 
+NOSTDINC_FLAGS+=-DCONFIG_IOCTL_CFG80211 -DRTW_USE_CFG80211_STA_EVENT -DBUILD_OPENWRT
+
+
 EXTRA_KCONFIG:= \
 	CONFIG_WFX=y
 
-EXTRA_CFLAGS:= \
+EXTRA_CFLAGS_APP:= \
+ 	-Wno-error=incompatible-pointer-types \
+ 	-Wno-error=frame-larger-than= \
 	$(patsubst CONFIG_%, -DCONFIG_%=1, $(patsubst %=m,%,$(filter %=m,$(EXTRA_KCONFIG)))) \
 	$(patsubst CONFIG_%, -DCONFIG_%=1, $(patsubst %=y,%,$(filter %=y,$(EXTRA_KCONFIG)))) \
 
@@ -55,17 +53,25 @@ EXTRA_CFLAGS:= \
 #	$(EXTRA_KCONFIG)
 
 define Build/Compile
+	+$(KERNEL_MAKE) $(PKG_JOBS) \
+		M="$(PKG_BUILD_DIR)" \
+		SUBDIRS="$(PKG_BUILD_DIR)" \
+		NOSTDINC_FLAGS="$(NOSTDINC_FLAGS)" \
+		EXTRA_CFLAGS="$(EXTRA_CFLAGS_APP)" \
+		$(EXTRA_KCONFIG) \
+		modules
 #	$(MAKE) -C "$(LINUX_DIR)" \
 #		$(MAKE_OPTS) \
 #		modules
-	+$(MAKE) $(PKG_JOBS) -C "$(LINUX_DIR)" \
-		$(KERNEL_MAKE_FLAGS) \
-		SUBDIRS="$(PKG_BUILD_DIR)" \
-		EXTRA_CFLAGS="$(EXTRA_CFLAGS)" \
-		$(EXTRA_KCONFIG) \
-		$(PKG_MAKE_FLAGS) \
-		NOSTDINC_FLAGS="$(NOSTDINC_FLAGS)" \
-		modules
+####
+#	+$(MAKE) $(PKG_JOBS) -C "$(LINUX_DIR)" \
+#		$(KERNEL_MAKE_FLAGS) \
+#		SUBDIRS="$(PKG_BUILD_DIR)" \
+#		EXTRA_CFLAGS="$(EXTRA_CFLAGS)" \
+#		$(EXTRA_KCONFIG) \
+#		$(PKG_MAKE_FLAGS) \
+#		NOSTDINC_FLAGS="$(NOSTDINC_FLAGS)" \
+#		modules
 endef
 
 $(eval $(call KernelPackage,wfx))
